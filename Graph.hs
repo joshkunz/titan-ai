@@ -9,16 +9,6 @@ data Graph a = Graph (Map.Map a (Set.Set a))
 empty :: Graph a
 empty = Graph Map.empty
 
-edge_set :: (Ord a) => Graph a -> Set.Set (a, a)
-edge_set (Graph adj) = 
-    let neighbor_set e b = Set.map (\x -> (e, x)) b
-        neighbor_fold a k v = Set.union a $ neighbor_set k v 
-    in
-        Map.foldlWithKey neighbor_fold Set.empty adj
-
-edges :: (Ord a) => Graph a -> [(a, a)]
-edges g = Set.toList $ edge_set g
-
 -- Symetrically insert an edge between "from" and "to"
 insertEdge :: (Ord a) => Graph a -> a -> a -> Graph a
 insertEdge (Graph adj) from to =
@@ -31,6 +21,19 @@ insertEdge_ adj from to =
             Map.insert from (Set.insert to neighbors) adj
     else
         Map.insert from (Set.fromList [to]) adj
+
+fromList :: (Ord a) => [(a, a)] -> Graph a
+fromList = foldl (\g (a, b) -> insertEdge g a b) empty
+
+edge_set :: (Ord a) => Graph a -> Set.Set (a, a)
+edge_set (Graph adj) = 
+    let neighbor_set e b = Set.map (\x -> (e, x)) b
+        neighbor_fold a k v = Set.union a $ neighbor_set k v 
+    in
+        Map.foldlWithKey neighbor_fold Set.empty adj
+
+edges :: (Ord a) => Graph a -> [(a, a)]
+edges g = Set.toList $ edge_set g
 
 neighbors :: (Ord a) => Graph a -> a -> Maybe (Set.Set a)
 neighbors (Graph adj) v = Map.lookup v adj
