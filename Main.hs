@@ -34,5 +34,5 @@ instance Ord Region where
 main = Graph.empty |> \x -> Graph.insertEdge x 1 2 
                    |> \x -> Graph.insertEdge x 2 3
                    |> \x -> Graph.insertEdge x 3 4
-                   |> \x -> Graph.adjacent x 1 4
+                   |> \x -> Graph.connected x 4 0
                    |> show |> putStrLn

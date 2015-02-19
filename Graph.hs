@@ -1,4 +1,4 @@
-module Graph (Graph, empty, insertEdge, adjacent) where 
+module Graph (Graph, empty, insertEdge, neighbors, adjacent, connected) where 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Common (to_sexp)
@@ -32,11 +32,26 @@ insertEdge_ adj from to =
     else
         Map.insert from (Set.fromList [to]) adj
 
+neighbors :: (Ord a) => Graph a -> a -> Maybe (Set.Set a)
+neighbors (Graph adj) v = Map.lookup v adj
+
 adjacent :: (Ord a) => Graph a -> a -> a -> Bool 
-adjacent (Graph adj) a b =
-    case Map.lookup a adj of
+adjacent g a b =
+    case neighbors g a of
         Just ns -> Set.member b ns
         Nothing -> False 
+
+connected :: (Ord a) => Graph a -> a -> a -> Bool
+connected g what to =
+    let connected_ g what to seen = 
+            if what == to then True else
+            if Set.member what seen then False else
+            let nseen = Set.insert what seen in
+            case neighbors g what of
+                Just ns -> any (\x -> connected_ g x to nseen) 
+                               (Set.toList ns)
+                Nothing -> False
+    in connected_ g what to Set.empty 
 
 edge_string :: (Show a) => (a, a) -> String
 edge_string (a, b) = to_sexp ["Edge", (show a), (show b)]
