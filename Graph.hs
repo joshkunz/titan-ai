@@ -1,7 +1,7 @@
 module Graph (Graph, empty, insertEdge, neighbors, adjacent, connected) where 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import Common (to_sexp)
+import Common (to_sexp, (|>))
 
 -- Mapping of a region to a list of its neighbors
 data Graph a = Graph (Map.Map a (Set.Set a))
@@ -9,21 +9,19 @@ data Graph a = Graph (Map.Map a (Set.Set a))
 empty :: Graph a
 empty = Graph Map.empty
 
--- Symetrically insert an edge between "from" and "to"
-insertEdge :: (Ord a) => Graph a -> a -> a -> Graph a
-insertEdge (Graph adj) from to =
-    Graph $ insertEdge_ (insertEdge_ adj from to) to from
-
 -- Performs one half of the symmetric insertion
-insertEdge_ adj from to = 
-    if Map.member from adj then
-        let (Just neighbors) = Map.lookup from adj in
-            Map.insert from (Set.insert to neighbors) adj
-    else
-        Map.insert from (Set.fromList [to]) adj
+insertEdge_ from to adj = 
+    case Map.lookup from adj of
+        Just ns -> Map.insert from (Set.insert to ns) adj
+        Nothing -> Map.insert from (Set.fromList [to]) adj
+
+-- Symetrically insert an edge between "from" and "to"
+insertEdge :: (Ord a) => a -> a -> Graph a -> Graph a
+insertEdge from to (Graph adj) =
+    insertEdge_ from to adj |> insertEdge_ to from |> Graph
 
 fromList :: (Ord a) => [(a, a)] -> Graph a
-fromList = foldl (\g (a, b) -> insertEdge g a b) empty
+fromList = foldl (\g (a, b) -> insertEdge a b g) empty
 
 edge_set :: (Ord a) => Graph a -> Set.Set (a, a)
 edge_set (Graph adj) = 
@@ -35,26 +33,26 @@ edge_set (Graph adj) =
 edges :: (Ord a) => Graph a -> [(a, a)]
 edges g = Set.toList $ edge_set g
 
-neighbors :: (Ord a) => Graph a -> a -> Maybe (Set.Set a)
-neighbors (Graph adj) v = Map.lookup v adj
+neighbors :: (Ord a) => a -> Graph a -> Maybe (Set.Set a)
+neighbors v (Graph adj) = Map.lookup v adj
 
-adjacent :: (Ord a) => Graph a -> a -> a -> Bool 
-adjacent g a b =
-    case neighbors g a of
+adjacent :: (Ord a) => a -> a -> Graph a -> Bool 
+adjacent a b g =
+    case neighbors a g of
         Just ns -> Set.member b ns
         Nothing -> False 
 
-connected :: (Ord a) => Graph a -> a -> a -> Bool
-connected g what to =
-    let connected_ g what to seen = 
+connected :: (Ord a) => a -> a -> Graph a -> Bool
+connected what to g =
+    let connected_ what to seen = 
             if what == to then True else
             if Set.member what seen then False else
             let nseen = Set.insert what seen in
-            case neighbors g what of
-                Just ns -> any (\x -> connected_ g x to nseen) 
+            case neighbors what g of
+                Just ns -> any (\x -> connected_ x to nseen) 
                                (Set.toList ns)
                 Nothing -> False
-    in connected_ g what to Set.empty 
+    in connected_ what to Set.empty 
 
 edge_string :: (Show a) => (a, a) -> String
 edge_string (a, b) = to_sexp ["Edge", (show a), (show b)]

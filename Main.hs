@@ -31,8 +31,13 @@ instance Eq Region where
 instance Ord Region where
     compare (Region ra _) (Region rb _) = compare ra rb
 
-main = Graph.empty |> \x -> Graph.insertEdge x 1 2 
-                   |> \x -> Graph.insertEdge x 2 3
-                   |> \x -> Graph.insertEdge x 3 4
-                   |> \x -> Graph.connected x 4 0
-                   |> show |> putStrLn
+main = 
+    let sr_a = (SuperRegion 1 10)
+        r_foo = (Region 0 sr_a)
+        r_baz = (Region 1 sr_a)
+        r_qux = (Region 2 sr_a)
+    in
+        Graph.empty |> Graph.insertEdge r_foo r_baz
+                    |> Graph.insertEdge r_baz r_qux
+                    |> Graph.connected r_foo r_qux
+                    |> show |> putStrLn
