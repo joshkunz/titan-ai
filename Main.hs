@@ -36,8 +36,11 @@ main =
         r_foo = (Region 0 sr_a)
         r_baz = (Region 1 sr_a)
         r_qux = (Region 2 sr_a)
-    in
-        Graph.empty |> Graph.insertEdge r_foo r_baz
-                    |> Graph.insertEdge r_baz r_qux
-                    |> Graph.connected r_foo r_qux
-                    |> show |> putStrLn
+        g = Graph.empty |> Graph.insertEdge r_foo r_baz
+                        |> Graph.insertEdge r_baz r_qux
+    in do
+        "  baz -- foo? " ++ (Graph.adjacent r_baz r_foo g |> show) |> putStrLn
+        "  qux -- foo? " ++ (Graph.connected r_qux r_foo g |> show ) |> putStrLn
+        "A baz -- foo? " ++ (Graph.removeEdge r_baz r_foo g
+                                |> Graph.connected r_baz r_foo
+                                |> show) |> putStrLn

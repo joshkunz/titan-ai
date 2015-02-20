@@ -1,4 +1,5 @@
-module Graph (Graph, empty, insertEdge, neighbors, adjacent, connected) where 
+module Graph (Graph, empty, insertEdge, removeEdge, 
+                     neighbors, adjacent, connected) where 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Common (to_sexp, (|>))
@@ -9,16 +10,25 @@ data Graph a = Graph (Map.Map a (Set.Set a))
 empty :: Graph a
 empty = Graph Map.empty
 
--- Performs one half of the symmetric insertion
-insertEdge_ from to adj = 
-    case Map.lookup from adj of
-        Just ns -> Map.insert from (Set.insert to ns) adj
-        Nothing -> Map.insert from (Set.fromList [to]) adj
-
 -- Symetrically insert an edge between "from" and "to"
 insertEdge :: (Ord a) => a -> a -> Graph a -> Graph a
 insertEdge from to (Graph adj) =
-    insertEdge_ from to adj |> insertEdge_ to from |> Graph
+    let insertDir from to adj =
+            case Map.lookup from adj of
+                Just ns -> Map.insert from (Set.insert to ns) adj
+                Nothing -> Map.insert from (Set.fromList [to]) adj
+    in
+        insertDir from to adj |> insertDir to from |> Graph
+
+removeEdge :: (Ord a) => a -> a -> Graph a -> Graph a
+removeEdge from to (Graph adj) = 
+    let removeDir from to adj =
+            case Map.lookup from adj of
+                Just ns -> if Set.member to ns then 
+                               Map.insert from (Set.delete to ns) adj
+                           else error "Cannot remove an edge that doesn't exist"
+                Nothing -> error "Cannot remove an edge that doesn't exist"
+     in removeDir from to adj |> removeDir to from |> Graph
 
 fromList :: (Ord a) => [(a, a)] -> Graph a
 fromList = foldl (\g (a, b) -> insertEdge a b g) empty
