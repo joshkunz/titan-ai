@@ -1,6 +1,8 @@
 module Game where
 import qualified Data.Map as Map
 import qualified Data.Set as Set
+import qualified Data.Foldable as Foldable
+import qualified Data.Maybe as Maybe
 import qualified Graph as Graph
 import qualified Sexp as Sexp
 import Common ((|>), unreachable)
@@ -83,8 +85,28 @@ empty :: Game
 empty = Game { settings = emptySettings
              , Game.map = emptyMap }
 
+setStringSetting :: String -> String -> Game -> GameSettings
+setStringSetting s v (Game gs gm) =
+    case s of
+        "timebank" -> gs { timebank = Just (read v :: Int) }
+        "time_per_move" -> gs { time_per_move = Just (read v :: Int) }
+        "max_rounds" -> gs { max_rounds = Just (read v :: Int) }
+        "your_bot" -> gs { your_bot = Just v }
+        "opponent_bot" -> gs { opponent_bot = Just v }
+        "starting_armies" -> gs { starting_armies = Just (read v :: Int) }
+        "starting_regions" -> 
+            words v |> Prelude.map (\x -> (read x :: Int))
+                    |> Prelude.map ((flip getRegionById) gm)
+                    |> Prelude.map Maybe.fromJust
+                    |> Set.fromList 
+                    |> \srs -> gs { starting_regions = srs }
+        _ -> unreachable s
+
 setMap :: GameMap -> Game -> Game
 setMap gm g = g { Game.map = gm }
+
+setSettings :: GameSettings -> Game -> Game
+setSettings gs g = g { settings = gs }
 
 insertSuperRegion :: SuperRegion -> GameMap -> GameMap
 insertSuperRegion s gm = gm { super_regions = super_regions gm |> Set.insert s }
@@ -94,9 +116,10 @@ insertRegion r gm = gm { regions = regions gm |> Set.insert r }
 
 getSuperRegionById :: Int -> GameMap -> Maybe SuperRegion
 getSuperRegionById id gm = 
-    case super_regions gm 
-             |> Set.filter (\(SuperRegion id_ _) -> id_ == id) 
-             |> Set.elems of
-        [sr] -> Just sr
-        [] -> Nothing
-        _ -> unreachable
+    super_regions gm 
+        |> Foldable.find (\(SuperRegion id_ _) -> id_ == id)
+
+getRegionById :: Int -> GameMap -> Maybe Region
+getRegionById id gm =
+    regions gm
+        |> Foldable.find (\(Region id_ _) -> id_ == id)

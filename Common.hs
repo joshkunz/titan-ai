@@ -1,7 +1,7 @@
 module Common where
 
-not_implemented = error "Not Implemented"
-unreachable = error "unreachable"
+not_implemented s = error $ "not implemented: " ++ s
+unreachable s = error $ "unreachable: " ++ s
 
 joinWithSep :: [a] -> [[a]] -> [a] 
 joinWithSep sep [] = []
