@@ -19,7 +19,7 @@ joinWithSep sep (x:xs) = x ++ sep ++ (joinWithSep sep xs)
 
 splitOn :: (Eq a) => a -> [a] -> [[a]]
 splitOn with l = 
-    let fsplit (x:xs) i = 
-            if i == with then (reverse x : xs) 
-            else ((i : x) : xs)
-    in foldl fsplit [[]] l |> reverse
+    let fsplit [[]] i = if i == with then [[]] else [[i]]
+        fsplit (x : xs) i = if i == with then [] : ((reverse x) : xs)
+                            else (i : x) : xs
+    in foldl fsplit [[]] l
