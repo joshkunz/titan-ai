@@ -5,6 +5,7 @@ import qualified Data.Foldable as Foldable
 import qualified Data.Maybe as Maybe
 import qualified Graph as Graph
 import qualified Sexp as Sexp
+import qualified Owned as Owned
 import Sexp (Sexp, sexp)
 import Common ((|>), unreachable)
 
@@ -19,9 +20,7 @@ data SuperRegion = SuperRegion { srid :: Integer
 data Region = Region { rid :: Integer
                      , super_region :: SuperRegion }
 
-data Owner = Us | Opponent | Neutral
-
-data RegionState = RegionState { owner :: Owner
+data RegionState = RegionState { owner :: Owned.Owner 
                                , units :: Integer }
 
 type RegionGraph = Graph.Graph Region
@@ -34,6 +33,7 @@ data GameSettings =
                  , opponent_bot :: Maybe String -- name of opponent bot
                  , starting_armies :: Maybe Integer -- Number of armies we can place
                  , starting_regions :: Set.Set Region -- Set of regions we can pick
+                 , starting_pick_amount :: Maybe Integer -- The number of regions we can pick from the starting set
                  }
 
 data GameMap = GameMap { super_regions :: Set.Set SuperRegion
@@ -43,6 +43,22 @@ data GameMap = GameMap { super_regions :: Set.Set SuperRegion
 
 data Game = Game { settings :: GameSettings
                  , map :: GameMap }
+
+-- (Placement region count)
+data Placement = 
+    Placement Owned.Owner Game.Region Integer 
+        deriving (Eq, Ord)
+
+instance Owned.Owned Placement where
+    owner (Placement o _ _) = o
+
+-- (Move source-region dest-region count)
+data Move = 
+    Move Owned.Owner Game.Region Game.Region Integer 
+        deriving (Eq, Ord)
+
+instance Owned.Owned Move where
+    owner (Move o _ _ _) = o
 
 instance Eq SuperRegion where
     (==) (SuperRegion ra ba) (SuperRegion rb bb) = (ra == rb) && (ba == bb)
@@ -62,10 +78,8 @@ instance Ord Region where
             EQ -> compare sra srb
             x -> x
 
-instance Show Owner where
-    show Us = "Us"
-    show Opponent = "Opponent"
-    show Neutral = "Neutral"
+instance Sexp Owned.Owner where
+    sexp o = Sexp.fromString (show o)
 
 instance Sexp RegionState where
     sexp (RegionState owner units) = 
@@ -93,7 +107,7 @@ instance Sexp GameMap where
 
 showMaybe :: (Show a) => Maybe a -> String
 showMaybe (Just a) = show a
-showMaybe Nothing = "<None>"
+showMaybe Nothing = "'None"
 
 instance Sexp GameSettings where
     sexp s = [ ["timebank", showMaybe $ timebank s]
@@ -101,7 +115,8 @@ instance Sexp GameSettings where
              , ["max-rounds", showMaybe $ max_rounds s]
              , ["your-bot", showMaybe $ your_bot s]
              , ["opponent-bot", showMaybe $ opponent_bot s]
-             , ["starting-armies", showMaybe $ starting_armies s]]
+             , ["starting-armies", showMaybe $ starting_armies s]
+             , ["starting-pick-amount", showMaybe $ starting_pick_amount s]  ]
              |> Prelude.map Sexp.fromStringList 
              |> \x -> x ++ [(starting_regions s 
                                 |> Set.toList |> Prelude.map sexp 
@@ -110,6 +125,22 @@ instance Sexp GameSettings where
 
 instance Sexp Game where
     sexp (Game s m) = Sexp.namedList "Game" [(sexp s), (sexp m)]
+
+instance Sexp Placement where
+    sexp (Placement o r i) =
+        Sexp.namedList "Placement" [ sexp o , sexp r 
+                                   , Sexp.fromString (show i) ]
+
+instance Show Placement where
+    show p = sexp p |> Sexp.render
+
+instance Sexp Move where
+    sexp (Move o s d i) =
+        Sexp.namedList "Move" [ sexp o , sexp s , sexp d
+                              , Sexp.fromString (show i) ]
+
+instance Show Move where
+    show m = sexp m |> Sexp.render
 
 instance Show Game where
     show g = sexp g |> Sexp.render
@@ -121,7 +152,8 @@ emptySettings = GameSettings { timebank = Nothing
                              , your_bot = Nothing 
                              , opponent_bot = Nothing 
                              , starting_armies = Nothing 
-                             , starting_regions = Set.empty } 
+                             , starting_regions = Set.empty 
+                             , starting_pick_amount = Nothing } 
 emptyMap :: GameMap
 emptyMap = GameMap { super_regions = Set.empty
                    , regions = Set.empty
@@ -147,6 +179,8 @@ setStringSetting s v (Game gs gm) =
                     |> Prelude.map Maybe.fromJust
                     |> Set.fromList 
                     |> \srs -> gs { starting_regions = srs }
+        "starting_pick_amount" -> 
+            gs { starting_pick_amount = Just (read v :: Integer) }
         _ -> unreachable s
 
 setMap :: GameMap -> Game -> Game
@@ -160,6 +194,11 @@ insertSuperRegion s gm = gm { super_regions = super_regions gm |> Set.insert s }
 
 insertRegion :: Region -> GameMap -> GameMap
 insertRegion r gm = gm { regions = regions gm |> Set.insert r }
+
+setNeighbors :: Region -> Set.Set Region -> GameMap -> GameMap
+setNeighbors r rs gm = 
+    Set.elems rs |> foldl (flip (Graph.insertEdge r)) (graph gm) 
+                 |> \x -> gm { graph = x }
 
 setRegionState :: Region -> RegionState -> GameMap -> GameMap
 setRegionState r s gm =

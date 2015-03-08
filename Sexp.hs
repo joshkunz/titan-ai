@@ -22,6 +22,12 @@ fromPair (a, b) = fromList [a, b]
 fromSet :: Set.Set PP.Doc -> PP.Doc 
 fromSet s = Set.elems s |> fromList
 
+namedSet :: String -> Set.Set PP.Doc -> PP.Doc
+namedSet n s = Set.elems s |> namedList n
+
+c_namedSet :: (Sexp a) => String -> Set.Set a -> PP.Doc
+c_namedSet n s = Set.elems s |> map sexp |> namedList n
+
 fromStringList :: [String] -> PP.Doc 
 fromStringList l = map PP.text l |> fromList
 
