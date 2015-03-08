@@ -1,6 +1,6 @@
 module Main where
 import qualified Game as Game
-import Game (SuperRegion(..), Region(..), Placement(..), Move(..))
+import Game (Game(..), SuperRegion(..), Region(..), Placement(..), Move(..))
 import qualified Graph as Graph
 import qualified Data.Set as Set
 import qualified Parse as Parse
@@ -63,7 +63,13 @@ runner e s =
 runLines :: [String] -> Engine -> IO Engine
 runLines ls e = foldl runner (return e) ls
 
+runStdin :: Engine -> IO Game 
+runStdin e = 
+    hGetLine stdin >>= \s -> runner (return e) s 
+                   >>= \e -> 
+                        hIsEOF stdin 
+                            >>= \eof -> if eof then return $ Engine.game e 
+                                               else runStdin e
+
 main = (Engine.fromFuncs startPicker armyPlacer Main.mover
-         |> runLines exampleGame)
-        >>= \e -> return (Engine.game e)
-        >>= \g -> (show g |> hPutStrLn stderr)
+         |> runStdin) >>= \g -> (show g |> hPutStrLn stderr)
