@@ -17,42 +17,54 @@ foldlWith2 f acc l = group2 l |> foldl (\acc (a, b) -> f acc a b) acc
 mapWith2 :: (a -> a -> b) -> [a] -> [b]
 mapWith2 f l = group2 l |> map (\(a, b) -> f a b) 
 
+-- Rotate the arguments of functions of three arguments. Somewhat
+-- equivalent to `flip`, but for 3 argument functions
 rargs3 :: (a -> b -> c -> d) -> c -> a -> b -> d
 rargs3 f a3 a1 a2 = f a1 a2 a3
 
 superRegionForStrings :: String -> String -> Game.SuperRegion
-superRegionForStrings id bounty = Game.SuperRegion (read id :: Int) 
-                                                   (read bounty :: Int)
+superRegionForStrings id bounty = Game.SuperRegion (read id :: Integer) 
+                                                   (read bounty :: Integer)
 
 regionForStringId :: String -> Game.SuperRegion -> Game.Region
-regionForStringId id sr = Game.Region (read id :: Int) sr
+regionForStringId id sr = Game.Region (read id :: Integer) sr
 
 parseSuperRegion :: String -> String -> Game.Game -> Game.Game
 parseSuperRegion id bounty g = 
-    Game.SuperRegion (read id :: Int) (read bounty :: Int)
+    Game.SuperRegion (read id :: Integer) (read bounty :: Integer)
         |> (flip Game.insertSuperRegion) (Game.map g)
         |> \gm -> g { Game.map = gm }
 
 parseRegion :: String -> String -> Game.Game -> Game.Game
 parseRegion id sid g =
     let gm = Game.map g
-        r = case Game.getSuperRegionById (read sid :: Int) gm of
-                Just sr -> Game.Region (read id :: Int) sr
+        r = case Game.getSuperRegionById (read sid :: Integer) gm of
+                Just sr -> Game.Region (read id :: Integer) sr
                 Nothing -> error $ "No super region with id \"" ++ sid ++ "\""
     in Game.insertRegion r gm |> \gm -> g { Game.map = gm }
+
+getRegionFromString :: String -> Game.Game -> Game.Region
+getRegionFromString id (Game.Game _ gm) = 
+    case Game.getRegionById (read id :: Integer) gm of
+        Just r -> r
+        Nothing -> error $ "Region \"" ++ id ++ "\" not found"
 
 parseNeighbors :: String -> String -> Game.Game -> Game.Game
 parseNeighbors rid ns g =
     let gm = Game.map g
-        getRfromS id = 
-            case Game.getRegionById (read id :: Int) gm of 
-                Just r -> r
-                Nothing -> error $ "Region \"" ++ id ++ "\" not found"
-        r = getRfromS rid
-    in splitOn ',' ns |> map getRfromS
+        r = getRegionFromString rid g
+    in splitOn ',' ns |> map ((flip getRegionFromString) g)
                       |> foldl (\g n -> Graph.insertEdge r n g) (Game.graph gm)
                       |> \gr -> gm { Game.graph = gr } 
                       |> \gm -> g { Game.map = gm }
+
+parseWastelands :: String -> Game.Game -> Game.Game
+parseWastelands rid g =
+    let gm = Game.map g
+        r = getRegionFromString rid g
+    in (Game.RegionState Game.Neutral Game.wasteland_units)
+          |> \s -> Game.setRegionState r s gm
+          |> (flip Game.setMap) g
 
 parseSetupMap :: [String] -> Game.Game -> Game.Game
 parseSetupMap ws g =
@@ -60,7 +72,7 @@ parseSetupMap ws g =
         "super_regions" -> foldlWith2 (rargs3 parseSuperRegion) g rest
         "regions" ->  foldlWith2 (rargs3 parseRegion) g rest
         "neighbors" -> foldlWith2 (rargs3 parseNeighbors) g rest
-        "wastelands" -> not_implemented opt
+        "wastelands" -> foldl (flip parseWastelands) g rest
         "opponent_starting_regions" -> not_implemented opt
         x -> error $ "Unrecognized setup_map sub command \"" ++ x ++ "\""
     where opt : rest = ws

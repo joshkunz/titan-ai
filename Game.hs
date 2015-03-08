@@ -5,28 +5,40 @@ import qualified Data.Foldable as Foldable
 import qualified Data.Maybe as Maybe
 import qualified Graph as Graph
 import qualified Sexp as Sexp
+import Sexp (Sexp, sexp)
 import Common ((|>), unreachable)
 
-data SuperRegion = SuperRegion { srid :: Int
-                               , bounty :: Int }
+-- The number of units on wastelands. Not specifically in
+-- the rules, but it appears to be this count from the
+-- games I've seen.
+wasteland_units = 6
 
-data Region = Region { rid :: Int
+data SuperRegion = SuperRegion { srid :: Integer 
+                               , bounty :: Integer }
+
+data Region = Region { rid :: Integer
                      , super_region :: SuperRegion }
+
+data Owner = Us | Opponent | Neutral
+
+data RegionState = RegionState { owner :: Owner
+                               , units :: Integer }
 
 type RegionGraph = Graph.Graph Region
 
 data GameSettings =
-    GameSettings { timebank :: Maybe Int        -- max game time in ms
-                 , time_per_move :: Maybe Int   -- max turn time in ms
-                 , max_rounds :: Maybe Int      -- max round count
+    GameSettings { timebank :: Maybe Integer        -- max game time in ms
+                 , time_per_move :: Maybe Integer   -- max turn time in ms
+                 , max_rounds :: Maybe Integer      -- max round count
                  , your_bot :: Maybe String     -- name of our bot
                  , opponent_bot :: Maybe String -- name of opponent bot
-                 , starting_armies :: Maybe Int -- Number of armies we can place
+                 , starting_armies :: Maybe Integer -- Number of armies we can place
                  , starting_regions :: Set.Set Region -- Set of regions we can pick
-                 } deriving (Show)
+                 }
 
 data GameMap = GameMap { super_regions :: Set.Set SuperRegion
                        , regions :: Set.Set Region
+                       , states :: Map.Map Region RegionState
                        , graph :: RegionGraph }
 
 data Game = Game { settings :: GameSettings
@@ -50,23 +62,57 @@ instance Ord Region where
             EQ -> compare sra srb
             x -> x
 
-instance Show SuperRegion where
-    show (SuperRegion s b) = Sexp.fromList ["SuperRegion", (show s), (show b)]
+instance Show Owner where
+    show Us = "Us"
+    show Opponent = "Opponent"
+    show Neutral = "Neutral"
 
-instance Show Region where
-    show (Region r sr) = Sexp.fromList ["Region", (show r), (show sr)]
+instance Sexp RegionState where
+    sexp (RegionState owner units) = 
+        Sexp.namedStringList "RegionState" [(show owner), (show units)]
 
-instance Show GameMap where
-    show (GameMap srs rs g) = 
-        Sexp.fromList [ "GameMap"
-                      , (Set.elems srs |> Prelude.map show 
-                                       |> Sexp.namedList "SuperRegions")
-                      , (Set.elems rs |> Prelude.map show 
-                                      |> Sexp.namedList "Regions")
-                      , (show g) ]
+instance Sexp SuperRegion where
+    sexp (SuperRegion s b) = 
+        Sexp.namedStringList "SuperRegion" [(show s), (show b)]
+
+instance Sexp Region where
+    sexp (Region r sr) = 
+        Sexp.namedList "Region" [(Sexp.fromString $ show r), (sexp sr)]
+
+instance Sexp GameMap where
+    sexp (GameMap srs rs st g) = 
+        Sexp.namedList "GameMap"
+            [ (Set.elems srs |> Prelude.map sexp 
+                             |> Sexp.namedList "SuperRegions")
+            , (Set.elems rs |> Prelude.map sexp 
+                            |> Sexp.namedList "Regions")
+            , (Map.assocs st |> Prelude.map (\(k, v) -> (sexp k, sexp v))
+                             |> Prelude.map Sexp.fromPair
+                             |> Sexp.namedList "States")
+            , (sexp g) ]
+
+showMaybe :: (Show a) => Maybe a -> String
+showMaybe (Just a) = show a
+showMaybe Nothing = "<None>"
+
+instance Sexp GameSettings where
+    sexp s = [ ["timebank", showMaybe $ timebank s]
+             , ["time-per-move", showMaybe $ time_per_move s]
+             , ["max-rounds", showMaybe $ max_rounds s]
+             , ["your-bot", showMaybe $ your_bot s]
+             , ["opponent-bot", showMaybe $ opponent_bot s]
+             , ["starting-armies", showMaybe $ starting_armies s]]
+             |> Prelude.map Sexp.fromStringList 
+             |> \x -> x ++ [(starting_regions s 
+                                |> Set.toList |> Prelude.map sexp 
+                                |> Sexp.namedList "starting-regions")]
+             |> Sexp.namedList "GameSettings"
+
+instance Sexp Game where
+    sexp (Game s m) = Sexp.namedList "Game" [(sexp s), (sexp m)]
 
 instance Show Game where
-    show (Game s m) = Sexp.fromList ["Game", (Sexp.fromShow s), (show m)]
+    show g = sexp g |> Sexp.render
 
 emptySettings :: GameSettings
 emptySettings = GameSettings { timebank = Nothing                 
@@ -79,6 +125,7 @@ emptySettings = GameSettings { timebank = Nothing
 emptyMap :: GameMap
 emptyMap = GameMap { super_regions = Set.empty
                    , regions = Set.empty
+                   , states = Map.empty
                    , graph = Graph.empty }
 
 empty :: Game
@@ -88,14 +135,14 @@ empty = Game { settings = emptySettings
 setStringSetting :: String -> String -> Game -> GameSettings
 setStringSetting s v (Game gs gm) =
     case s of
-        "timebank" -> gs { timebank = Just (read v :: Int) }
-        "time_per_move" -> gs { time_per_move = Just (read v :: Int) }
-        "max_rounds" -> gs { max_rounds = Just (read v :: Int) }
+        "timebank" -> gs { timebank = Just (read v :: Integer) }
+        "time_per_move" -> gs { time_per_move = Just (read v :: Integer) }
+        "max_rounds" -> gs { max_rounds = Just (read v :: Integer) }
         "your_bot" -> gs { your_bot = Just v }
         "opponent_bot" -> gs { opponent_bot = Just v }
-        "starting_armies" -> gs { starting_armies = Just (read v :: Int) }
+        "starting_armies" -> gs { starting_armies = Just (read v :: Integer) }
         "starting_regions" -> 
-            words v |> Prelude.map (\x -> (read x :: Int))
+            words v |> Prelude.map (\x -> (read x :: Integer))
                     |> Prelude.map ((flip getRegionById) gm)
                     |> Prelude.map Maybe.fromJust
                     |> Set.fromList 
@@ -114,12 +161,17 @@ insertSuperRegion s gm = gm { super_regions = super_regions gm |> Set.insert s }
 insertRegion :: Region -> GameMap -> GameMap
 insertRegion r gm = gm { regions = regions gm |> Set.insert r }
 
-getSuperRegionById :: Int -> GameMap -> Maybe SuperRegion
+setRegionState :: Region -> RegionState -> GameMap -> GameMap
+setRegionState r s gm =
+    states gm |> Map.insert r s
+              |> \s -> gm { states = s }
+
+getSuperRegionById :: Integer -> GameMap -> Maybe SuperRegion
 getSuperRegionById id gm = 
     super_regions gm 
         |> Foldable.find (\(SuperRegion id_ _) -> id_ == id)
 
-getRegionById :: Int -> GameMap -> Maybe Region
+getRegionById :: Integer -> GameMap -> Maybe Region
 getRegionById id gm =
     regions gm
         |> Foldable.find (\(Region id_ _) -> id_ == id)

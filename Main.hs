@@ -12,7 +12,7 @@ startupLines = [ "settings timebank 10000"
                , "setup_map super_regions 1 2 2 5"
                , "setup_map regions 1 1 2 1 3 2 4 2 5 2"
                , "setup_map neighbors 1 2,3,4 2 3 4 5"
-               --, "setup_map wastelands 3"
+               , "setup_map wastelands 3"
                , "settings starting_regions 2 4"
                ]
 

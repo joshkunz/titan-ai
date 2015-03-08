@@ -3,7 +3,8 @@ module Graph (Graph, empty, insertEdge, removeEdge,
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Sexp as Sexp
-import Common ((|>))
+import Sexp (Sexp, sexp)
+import Common ((|>), ($|))
 
 -- Mapping of a region to a list of its neighbors
 data Graph a = Graph (Map.Map a (Set.Set a))
@@ -34,14 +35,28 @@ removeEdge from to (Graph adj) =
 fromList :: (Ord a) => [(a, a)] -> Graph a
 fromList = foldl (\g (a, b) -> insertEdge a b g) empty
 
-edgeSet :: (Ord a) => Graph a -> Set.Set (a, a)
-edgeSet (Graph adj) = 
-    let neighbor_set e b = Set.map (\x -> (e, x)) b
-        neighbor_fold a k v = Set.union a $ neighbor_set k v 
-    in
-        Map.foldlWithKey neighbor_fold Set.empty adj
+data Edge a = Edge a a
 
-edges :: (Ord a) => Graph a -> [(a, a)]
+sortableEdge :: (Ord a) => Edge a -> Edge a
+sortableEdge (Edge a b) = Edge (min a b) (max a b)
+
+instance (Ord a) => Eq (Edge a) where
+    (==) a b = (a1, b1) == (a2, b2)
+               where (Edge a1 b1) = sortableEdge a
+                     (Edge a2 b2) = sortableEdge b
+
+instance (Ord a) => Ord (Edge a) where
+    compare a b = compare (a1, b1) (a2, b2)
+                  where (Edge a1 b1) = sortableEdge a
+                        (Edge a2 b2) = sortableEdge b
+
+edgeSet :: (Ord a) => Graph a -> Set.Set (Edge a)
+edgeSet (Graph adj) = 
+    let neighbor_set e b = Set.map (\x -> Edge e x) b
+        neighbor_join a k v = neighbor_set k v |> Set.union a
+    in Map.foldlWithKey neighbor_join Set.empty adj
+
+edges :: (Ord a) => Graph a -> [(Edge a)]
 edges g = Set.toList $ edgeSet g
 
 neighbors :: (Ord a) => a -> Graph a -> Maybe (Set.Set a)
@@ -65,8 +80,8 @@ connected what to g =
                 Nothing -> False
     in connected_ what to Set.empty 
 
-edgeString :: (Show a) => (a, a) -> String
-edgeString (a, b) = Sexp.fromList ["Edge", (show a), (show b)]
+instance (Ord a, Sexp a) => Sexp (Edge a) where
+    sexp (Edge a b) = Sexp.namedList "Edge" [(sexp a), (sexp b)]
 
-instance (Ord a, Show a) => Show (Graph a) where
-    show g = "(Graph " ++ (unwords $ map edgeString $ edges g) ++ ")"
+instance (Ord a, Sexp a) => Sexp (Graph a) where
+    sexp g = Sexp.namedList "Graph" $| map sexp $| edges g
