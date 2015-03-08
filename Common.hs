@@ -28,7 +28,8 @@ splitOn with l =
     let fsplit [[]] i = if i == with then [[]] else [[i]]
         fsplit (x : xs) i = if i == with then [] : ((reverse x) : xs)
                             else (i : x) : xs
-    in foldl fsplit [[]] l
+        head : rest = foldl fsplit [[]] l
+    in reverse ((reverse head) : rest)
 
 -- Group items of the given list into non-overlapping pairs
 group2 :: [a] -> [(a, a)]

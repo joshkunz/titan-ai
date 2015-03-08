@@ -51,6 +51,7 @@ exampleGame = [ "settings timebank 10000"
               , "go place_armies 10000"
               , "go attack/transfer 10000"
               , "update_map 1 neutral 2 4 player2 5 5 neutral 2"
+              , "opponent_moves player2 place_armies 1 10, player2 attack/transfer 1 2 5"
               ]
 
 runner :: IO Engine -> String -> IO Engine

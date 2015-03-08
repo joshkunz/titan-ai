@@ -145,7 +145,9 @@ parseMoveList ms g =
           o = (ownerForPlayer name g)
 
 parseOpponentMoves :: [String] -> Game.Game -> Command
-parseOpponentMoves ms g = parseMoveList ms g |> Set.fromList |> OpponentMoves
+parseOpponentMoves ms g = 
+    let rs = unwords ms |> filter ((/=) ',') |> words
+    in parseMoveList rs g |> Set.fromList |> OpponentMoves
 
 parseGo :: [String] -> Game.Game -> Command 
 parseGo cs g =
