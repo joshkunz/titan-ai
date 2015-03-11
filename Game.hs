@@ -6,6 +6,7 @@ import qualified Data.Maybe as Maybe
 import qualified Graph as Graph
 import qualified Sexp as Sexp
 import qualified Owned as Owned
+import Owned (Owner(..)) 
 import Sexp (Sexp, sexp)
 import Common ((|>), unreachable)
 
@@ -92,6 +93,9 @@ instance Sexp SuperRegion where
 instance Sexp Region where
     sexp (Region r sr) = 
         Sexp.namedList "Region" [(Sexp.fromString $ show r), (sexp sr)]
+
+instance Show Region where
+    show r = sexp r |> Sexp.render
 
 instance Sexp GameMap where
     sexp (GameMap srs rs st g) = 
@@ -210,7 +214,22 @@ getSuperRegionById id gm =
     super_regions gm 
         |> Foldable.find (\(SuperRegion id_ _) -> id_ == id)
 
+regionsInSuperRegion :: SuperRegion -> GameMap -> Set.Set Region 
+regionsInSuperRegion sr gm =
+    Set.filter (regionIn sr) (regions gm)
+    where regionIn sr (Region id su) = sr == su
+
 getRegionById :: Integer -> GameMap -> Maybe Region
 getRegionById id gm =
     regions gm
         |> Foldable.find (\(Region id_ _) -> id_ == id)
+
+stateForRegion :: Region -> GameMap -> Maybe RegionState
+stateForRegion r gm = Map.lookup r (states gm) 
+
+regionsOwnedBy :: Owner -> GameMap -> Set.Set Region
+regionsOwnedBy o gm  = 
+    Game.regions gm |> Set.filter (ownedBy o)
+    where ownedBy o r = case Game.stateForRegion r gm of
+                            Just s -> (Game.owner s) == o
+                            Nothing -> error ("No owner for region: " ++ (show r))

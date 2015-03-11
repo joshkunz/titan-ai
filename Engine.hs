@@ -8,14 +8,16 @@ import Owned (Owned, Owner(..), owner)
 import Parse (Command(..))
 import Common ((|>), not_implemented, checkListProperty)
 
+data Result a = Result a (Maybe String)
+
 type StartPicker = 
-    Integer -> Set.Set Game.Region -> Game.Game -> Game.Region
+    Integer -> Set.Set Game.Region -> Game.Game -> Result Game.Region
 
 type ArmyPlacer = 
-    Integer -> Game.Game -> [Game.Placement]
+    Integer -> Game.Game -> Result [Game.Placement]
 
 type Mover = 
-    Integer -> Game.Game -> [Game.Move]
+    Integer -> Game.Game -> Result [Game.Move]
 
 data Engine = Engine { start_picker :: StartPicker
                      , army_placer :: ArmyPlacer
@@ -24,6 +26,9 @@ data Engine = Engine { start_picker :: StartPicker
 
 pickString :: Game.Region -> String
 pickString r = (Game.rid r |> show) ++ "\n"
+
+noLog :: a -> Result a
+noLog v = Result v Nothing
 
 playerForOwner :: Owner -> Game.Game -> String
 playerForOwner o g =
@@ -39,7 +44,7 @@ playerForOwner o g =
 haveSameOwner :: (Owned a) => a -> a -> Bool
 haveSameOwner ow1 ow2 = (owner ow1) == (owner ow2)
 
-noMoves = "No Moves\n"
+noMoves = "No moves\n"
 
 placementString :: Game.Placement -> String
 placementString (Game.Placement o r i) = 
@@ -98,7 +103,7 @@ updatePlacement :: Game.Placement -> Game.GameMap -> Game.GameMap
 updatePlacement (Game.Placement o r i) gm =
     Game.RegionState o i |> \rs -> Game.setRegionState r rs gm
 
-nextLine :: String -> Engine -> (Maybe String, Engine)
+nextLine :: String -> Engine -> (Maybe String, Maybe String, Engine)
 nextLine l e =
     case (Parse.parseLine l g) of
         Setting s v -> g |> Game.setStringSetting s v 
@@ -120,24 +125,27 @@ nextLine l e =
                          |> newG |> emptyR
         PickStartingRegion i rs ->
             ( pickString sr |> Just
+            , log
             , Game.setRegionState sr (Game.RegionState Us 2) gm |> newG )
-            where sr = (start_picker e) i rs g
+            where Result sr log = (start_picker e) i rs g
         UpdateMap ps -> Set.elems ps |> foldl (flip updatePlacement) gm
                                      |> newG |> emptyR
-        OpponentMoves ms -> (Nothing, e)
+        OpponentMoves ms -> e |> emptyR
         PlaceArmies i -> 
             ( Just (placementsString ps g)
+            , log
             , foldl (flip updatePlacement) gm ps |> newG )
-            where ps = (army_placer e) i g
+            where Result ps log = (army_placer e) i g
         AttackOrTransfer i ->
             ( Just (movesString ms g)
+            , log
             , filter ownedByUs ms |> map placementForMove 
                                   |> foldl (flip updatePlacement) gm
                                   |> newG )
             where ownedByUs x = (owner x) == Us
-                  ms = (mover e) i g
+                  Result ms log = (mover e) i g
     where g = (game e)
           gm = (Game.map g)
           newE g = e { game = g }
           newG gm = ((flip Game.setMap) g) gm |> newE
-          emptyR r = (Nothing, r)
+          emptyR r = (Nothing, Nothing, r)

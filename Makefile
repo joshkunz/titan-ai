@@ -1,6 +1,8 @@
-.PHONY: clean default
+.PHONY: clean default zip
 
 bin = main
+
+zipname = obstack-warlight2.zip
 
 src = $(wildcard *.hs)
 intfs = $(patsubst %.hs,%.hi,$(src))
@@ -16,4 +18,7 @@ $(bin): $(src)
 	ghc -o $@ $^
 
 clean:
-	rm -f $(bin) $(intfs) $(objs)
+	rm -f $(bin) $(intfs) $(objs) $(zipname)
+
+zip:
+	git ls-files | zip $(zipname) -@
