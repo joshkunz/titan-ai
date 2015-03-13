@@ -1,5 +1,4 @@
-module Graph (Graph, empty, insertEdge, removeEdge, 
-                     neighbors, adjacent, connected) where 
+module Graph where 
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Sexp as Sexp
@@ -8,6 +7,12 @@ import Common ((|>), ($|))
 
 -- Mapping of a region to a list of its neighbors
 data Graph a = Graph (Map.Map a (Set.Set a))
+
+-- External representation of a graph edge
+data Edge a = Edge a a
+
+-- External Representation of a path
+type Path a = [Edge a]
 
 empty :: Graph a
 empty = Graph Map.empty
@@ -35,7 +40,6 @@ removeEdge from to (Graph adj) =
 fromList :: (Ord a) => [(a, a)] -> Graph a
 fromList = foldl (\g (a, b) -> insertEdge a b g) empty
 
-data Edge a = Edge a a
 
 sortableEdge :: (Ord a) => Edge a -> Edge a
 sortableEdge (Edge a b) = Edge (min a b) (max a b)
@@ -79,6 +83,22 @@ connected what to g =
                                (Set.toList ns)
                 Nothing -> False
     in connected_ what to Set.empty 
+
+
+-- Yields the closest vertex to the start vertex for which the given
+-- function yields true.
+closest :: (Ord a) => a -> (a -> Bool) -> Graph a -> Maybe (a, Path a)
+closest start f g =
+    let traverse found [] = Nothing
+        traverse found ((h, path) : tail) =
+            if f h then Just (h, reverse path)
+            else traverse nextFound nextTail
+            where nextFound = (Set.insert h found)
+                  extendPath n = (n, (Edge h n) : path)
+                  extendTail ns = Set.filter ((flip Set.notMember) found) ns 
+                                    |> Set.elems |> map extendPath |> (tail ++)
+                  nextTail = maybe tail extendTail $ neighbors h g
+    in traverse Set.empty [(start, [])]
 
 instance (Ord a, Sexp a) => Sexp (Edge a) where
     sexp (Edge a b) = Sexp.namedList "Edge" [(sexp a), (sexp b)]

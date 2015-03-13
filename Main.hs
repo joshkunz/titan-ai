@@ -57,8 +57,9 @@ runLines ls e = foldl runner (return e) ls
 
 runStdin :: Engine -> IO Game 
 runStdin e = 
-    hGetLine stdin >>= doLogInput 
+    hGetLine stdin >>= doLogInput
                    >>= \s -> runner (return e) s 
+--                   >>= \e -> (hPutStrLn stdout (Engine.game e |> show) >> return e)
                    >>= \e -> 
                         hIsEOF stdin 
                             >>= \eof -> if eof then return $ Engine.game e 

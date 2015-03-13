@@ -99,10 +99,6 @@ starting_region = Game.RegionState Opponent 2
 -- Default unit count is 2
 unclaimed = Game.RegionState Neutral 2
 
-updatePlacement :: Game.Placement -> Game.GameMap -> Game.GameMap
-updatePlacement (Game.Placement o r i) gm =
-    Game.RegionState o i |> \rs -> Game.setRegionState r rs gm
-
 nextLine :: String -> Engine -> (Maybe String, Maybe String, Engine)
 nextLine l e =
     case (Parse.parseLine l g) of
@@ -128,19 +124,19 @@ nextLine l e =
             , log
             , Game.setRegionState sr (Game.RegionState Us 2) gm |> newG )
             where Result sr log = (start_picker e) i rs g
-        UpdateMap ps -> Set.elems ps |> foldl (flip updatePlacement) gm
+        UpdateMap ps -> Set.elems ps |> foldl (flip Game.applyPlacement) gm
                                      |> newG |> emptyR
         OpponentMoves ms -> e |> emptyR
         PlaceArmies i -> 
             ( Just (placementsString ps g)
             , log
-            , foldl (flip updatePlacement) gm ps |> newG )
+            , foldl (flip Game.applyPlacement) gm ps |> newG )
             where Result ps log = (army_placer e) i g
         AttackOrTransfer i ->
             ( Just (movesString ms g)
             , log
             , filter ownedByUs ms |> map placementForMove 
-                                  |> foldl (flip updatePlacement) gm
+                                  |> foldl (flip Game.applyPlacement) gm
                                   |> newG )
             where ownedByUs x = (owner x) == Us
                   Result ms log = (mover e) i g

@@ -55,7 +55,7 @@ instance Owned.Owned Placement where
 
 -- (Move source-region dest-region count)
 data Move = 
-    Move Owned.Owner Game.Region Game.Region Integer 
+    Move Owned.Owner Region Region Integer 
         deriving (Eq, Ord)
 
 instance Owned.Owned Move where
@@ -209,6 +209,10 @@ setRegionState r s gm =
     states gm |> Map.insert r s
               |> \s -> gm { states = s }
 
+getRegionState :: Region -> GameMap -> Maybe RegionState
+getRegionState r gm =
+    states gm |> Map.lookup r
+
 getSuperRegionById :: Integer -> GameMap -> Maybe SuperRegion
 getSuperRegionById id gm = 
     super_regions gm 
@@ -227,9 +231,25 @@ getRegionById id gm =
 stateForRegion :: Region -> GameMap -> Maybe RegionState
 stateForRegion r gm = Map.lookup r (states gm) 
 
+unitsInRegion :: Region -> GameMap -> Maybe Integer
+unitsInRegion r gm = stateForRegion r gm |> fmap units 
+
+regionOwner :: Region -> GameMap -> Maybe Owner
+regionOwner r gm = stateForRegion r gm |> fmap owner
+
+regionOwnedBy :: Region -> Owner -> GameMap -> Bool
+regionOwnedBy r o gm = 
+    case regionOwner r gm of
+        Just o_ -> o_ == o
+        Nothing -> error ("No owner for region: " ++ (show r))
+
 regionsOwnedBy :: Owner -> GameMap -> Set.Set Region
 regionsOwnedBy o gm  = 
-    Game.regions gm |> Set.filter (ownedBy o)
-    where ownedBy o r = case Game.stateForRegion r gm of
-                            Just s -> (Game.owner s) == o
-                            Nothing -> error ("No owner for region: " ++ (show r))
+    Game.regions gm |> Set.filter (\r -> regionOwnedBy r o gm)
+
+applyPlacement :: Placement -> GameMap -> GameMap
+applyPlacement (Placement o region count) gm =
+    RegionState o count |> \rs -> setRegionState region rs gm
+
+applyPlacementGame :: Placement -> Game -> Game
+applyPlacementGame p g = Game.map g |> applyPlacement p |> (flip setMap) g

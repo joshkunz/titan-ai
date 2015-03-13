@@ -42,3 +42,11 @@ fromStringSet s = Set.elems s |> fromStringList
 
 render :: PP.Doc -> String
 render = PP.renderStyle (PP.Style PP.PageMode 80 1.5)
+
+-- Standard Instances
+
+instance (Sexp a) => Sexp [a] where
+    sexp l = fromList $ map sexp l
+
+instance (Sexp a, Sexp b) => Sexp (a, b) where
+    sexp (a, b) = fromList [sexp a, sexp b]
