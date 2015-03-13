@@ -217,7 +217,8 @@ moveForSafeRegion r g =
     case Game.unitsInRegion r gm of
         Just u -> if u > minDefenceForce then
                     case Graph.closest r isUnsafe graph of
-                        Just (frontline, (Edge _ nr) : []) -> Just (Move Us r nr (u - 1))
+                        Just (frontline, (Edge _ nr) : _) -> Just (Move Us r nr (u - 1))
+                        Just (frontline, []) -> Nothing
                         Nothing -> Nothing 
                   else Nothing
         Nothing -> error $ "Region: " ++ (show r) ++ " has no units"

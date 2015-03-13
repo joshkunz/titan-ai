@@ -46,9 +46,12 @@ haveSameOwner ow1 ow2 = (owner ow1) == (owner ow2)
 
 noMoves = "No moves\n"
 
-placementString :: Game.Placement -> String
-placementString (Game.Placement o r i) = 
-    (show (Game.rid r)) ++ " " ++ (show i) ++ ","
+placementString :: Game.Placement -> Game.Game -> String
+placementString (Game.Placement o r i) g = 
+    (playerForOwner o g) 
+        ++ " place_armies " 
+        ++ (show (Game.rid r)) 
+        ++ " " ++ (show i) ++ ","
 
 placementsString :: [Game.Placement] -> Game.Game -> String
 placementsString [] g = noMoves
@@ -56,16 +59,15 @@ placementsString ps g =
     if not (checkListProperty haveSameOwner ps) then 
         error "Placements have differing owners"
     else
-        (playerForOwner o g) ++ " place_armies " 
-                             ++ ((map placementString ps) |> unwords)
-                             ++ "\n"
-    where (Game.Placement o _ _) : rest = ps
+        (map ((flip placementString) g) ps |> unwords) ++ "\n"
 
-moveString :: Game.Move -> String
-moveString (Game.Move _ sr tr i) =
-    (show (Game.rid sr)) ++ 
-        " " ++ (show (Game.rid tr)) ++
-        " " ++ (show i) ++ ","
+moveString :: Game.Move -> Game.Game -> String
+moveString (Game.Move o sr tr i) g =
+    (playerForOwner o g) 
+        ++ " attack/transfer "
+        ++ (show (Game.rid sr)) 
+        ++ " " ++ (show (Game.rid tr))
+        ++ " " ++ (show i) ++ ","
 
 movesString :: [Game.Move] -> Game.Game -> String
 movesString [] g = noMoves
@@ -73,10 +75,7 @@ movesString ms g =
     if not (checkListProperty haveSameOwner ms) then
         error "Moves have different owners"
     else
-        (playerForOwner o g) ++ " attack/transfer "
-                             ++ ((map moveString ms) |> unwords)
-                             ++ "\n"
-    where (Game.Move o _ _ _) : rest = ms
+        (map ((flip moveString) g) ms |> unwords) ++ "\n"
 
 placementForMove :: Game.Move -> Game.Placement
 placementForMove (Game.Move o sr tr i) = Game.Placement o tr i
