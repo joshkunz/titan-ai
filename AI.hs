@@ -353,6 +353,6 @@ mover i g =
                         |> map ((flip moveAttackBasic) g) |> onlyJust
         moves = safeMoves ++ attackMoves
         log = moves |> map Sexp.sexp |> Sexp.namedList "Moves" |> Sexp.render
-    in Result moves (Just ("[Log/Mover] " ++ log))
+    in Result moves (Just ("[Log/Mover] " ++ log ++ "\n" ))
     where safe = safeRegions g
           unsafe = unsafeRegions g

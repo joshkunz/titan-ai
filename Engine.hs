@@ -129,14 +129,15 @@ nextLine l e =
         PlaceArmies i -> 
             ( Just (placementsString ps g)
             , log
-            , foldl (flip Game.applyPlacement) gm ps |> newG )
+            -- Should probably handle move effects here
+            --, foldl (flip Game.applyPlacement) gm ps |> newG )
+            , g |> newE )
             where Result ps log = (army_placer e) i g
         AttackOrTransfer i ->
             ( Just (movesString ms g)
             , log
-            , filter ownedByUs ms |> map placementForMove 
-                                  |> foldl (flip Game.applyPlacement) gm
-                                  |> newG )
+            -- Should probably handle the effects of our moves here
+            , g |> newE )
             where ownedByUs x = (owner x) == Us
                   Result ms log = (mover e) i g
     where g = (game e)
