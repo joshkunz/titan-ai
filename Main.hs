@@ -28,7 +28,7 @@ exampleGame = [ "settings timebank 10000"
               ]
 
 log_output = False
-log_input = True 
+log_input = False
 
 noop = return () :: IO ()
 
