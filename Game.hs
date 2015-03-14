@@ -241,7 +241,7 @@ regionOwnedBy :: Region -> Owner -> GameMap -> Bool
 regionOwnedBy r o gm = 
     case regionOwner r gm of
         Just o_ -> o_ == o
-        Nothing -> error ("No owner for region: " ++ (show r))
+        Nothing -> False 
 
 regionsOwnedBy :: Owner -> GameMap -> Set.Set Region
 regionsOwnedBy o gm  = 
