@@ -19,6 +19,7 @@ import qualified Sexp as Sexp
 import Common ((|>), choose)
 import qualified Graph as Graph
 import Graph (Edge(..), Graph(..)) 
+import Text.Printf (printf)
 
 --import Debug.Trace (trace)
 
@@ -26,6 +27,8 @@ import Graph (Edge(..), Graph(..))
 minIncome = 5
 
 minDefenceForce = 1
+
+captureFraction = 0.8
 
 -- Probability an attacker destroys a defender and vice versa
 attackerProb = 0.6
@@ -184,33 +187,49 @@ minimumCaptureForce r con gm =
                         Just u -> u
                         Nothing -> error $ "No such region: " ++ (show r)
 
-aNeighbors :: (Ord a, Show a) => a -> Graph a -> Set a
-aNeighbors n g = 
+alwaysNeighbors :: (Ord a, Show a) => a -> Graph a -> Set a
+alwaysNeighbors n g = 
     case Graph.neighbors n g of
         Just ns -> ns
         Nothing -> error $ "Region: " ++ (show n) ++ " has no neighbors"
 
+alwaysUnits :: Region -> GameMap -> Integer
+alwaysUnits r gm =
+    case Game.unitsInRegion r gm of
+        Just u -> u
+        Nothing -> error $ ("No units in region " ++ (show r))
+
 hostileNeighbors :: Region -> GameMap -> Set Region
 hostileNeighbors r gm =
-    Game.graph gm |> aNeighbors r
+    Game.graph gm |> alwaysNeighbors r
                   |> Set.filter (\r -> not (Game.regionOwnedBy r Us gm))
 
 friendlyNeighbors :: Region -> GameMap -> Set Region
 friendlyNeighbors r gm = 
-    (Game.graph gm |> aNeighbors r) \\ hostileNeighbors r gm
+    (Game.graph gm |> alwaysNeighbors r) \\ hostileNeighbors r gm
 
 -- True if all of 'r's neighbors are friendly
 isSafeRegion :: Region -> GameMap -> Bool
 isSafeRegion r gm = hostileNeighbors r gm == Set.empty
 
-safeRegions :: Game -> Set Region
-safeRegions g =
-    let gm = Game.map g in
-        Game.regionsOwnedBy Us gm |> Set.filter ((flip isSafeRegion) gm)
+safeRegions :: GameMap -> Set Region
+safeRegions gm = Game.regionsOwnedBy Us gm |> Set.filter ((flip isSafeRegion) gm)
 
-unsafeRegions :: Game -> Set Region
-unsafeRegions g = 
-    let gm = Game.map g in Game.regionsOwnedBy Us gm \\ (safeRegions g)
+unsafeRegions :: GameMap -> Set Region
+unsafeRegions gm = Game.regionsOwnedBy Us gm \\ (safeRegions gm)
+
+isCapturable :: Region -> Integer -> Double -> GameMap -> Bool
+isCapturable r units confidence gm =
+    (captureProbability r units gm) >= confidence
+
+regionsWithCapturableNeighbors :: Double -> GameMap -> Set Region
+regionsWithCapturableNeighbors confidence gm =
+    unsafeRegions gm |> Set.filter neighborCapturable
+    where neighborCapturable r = 
+            let units = alwaysUnits r gm in
+                hostileNeighbors r gm 
+                    |> Set.elems
+                    |> any (\r -> isCapturable r units confidence gm)
 
 moveForSafeRegion :: Region -> Game -> Maybe Move
 moveForSafeRegion r g =
@@ -226,43 +245,48 @@ moveForSafeRegion r g =
           graph = Game.graph gm
           isUnsafe r = not (isSafeRegion r gm)
 
-rankTarget :: Region -> Game -> Double -- [0..1]
-rankTarget r@(Region _ sr) g = 
+rankTargetCaptureValue :: Region -> Region -> Game -> Double -- [0..1]
+rankTargetCaptureValue _ r@(Region _ sr) g = 
     friendlyFraction + superRegionCoverFraction
     where gm = Game.map g
           graph = Game.graph gm
           -- How much territory do we have bordering the region?
           friendlyFraction = (Set.size (friendlyNeighbors r gm)) 
-                 `divApprox` (Set.size (aNeighbors r graph))
+                 `divApprox` (Set.size (alwaysNeighbors r graph))
           allInSr = Game.regionsInSuperRegion sr gm
           oursInSr = Set.filter (\r -> Game.regionOwnedBy r Us gm) allInSr
           superRegionCoverFraction = (Set.size oursInSr)
                          `divApprox` (Set.size allInSr)
 
+rankTargetPlacementValue :: Region -> Region -> Game -> Double
+rankTargetPlacementValue src t g = 
+    destUnits `divApprox` (srcUnits + destUnits)
+    where gm = Game.map g
+          srcUnits = alwaysUnits src gm
+          destUnits = alwaysUnits t gm
+
 byRank :: (Region, Double) -> (Region, Double) -> Ordering
 byRank (_, ra) (_, rb) = compare ra rb
 
-isCapturable :: Region -> Integer -> Double -> GameMap -> Bool
-isCapturable r units confidence gm =
-    (captureProbability r units gm) >= confidence
-
-regionTargets :: Region -> Game -> [(Region, Double)]
-regionTargets r g = possibleTargets
-        |> Set.filter (\r -> isCapturable r units minCaptureConfidence gm)
-        |> Set.elems
-        |> map (\r -> (r, rankTarget r g))
-        |> List.sortBy byRank 
-        |> reverse
+-- Assumes that the given ranking function will be pure
+rankTargetsForRegionWith :: (Region -> Region -> Game -> Double) -> Region -> Game -> [(Region, Double)]
+rankTargetsForRegionWith f r g =
+    possibleTargets |> Set.foldl rankFold Set.empty
+                    |> Set.elems
+                    |> List.sortBy byRank
+                    |> reverse
     where gm = Game.map g
-          units = Game.unitsInRegion r gm 
-                    |> Maybe.fromMaybe (error $ "No units in regionTargets")
           possibleTargets = hostileNeighbors r gm
+          rankFold acc target = (Set.insert (target, (f r target g)) acc)
 
 moveAttackBasic :: Region -> Game -> Maybe Move
 moveAttackBasic r g =
-    regionTargets r g |> pickAttack
-    where units = Game.unitsInRegion r (Game.map g)
-                    |> Maybe.fromMaybe (error $ "No units in regionTargets")
+    if isCapturable r units minCaptureConfidence gm then 
+        regionTargets r g |> pickAttack
+    else Nothing
+    where gm = Game.map g
+          units = alwaysUnits r gm
+          regionTargets = rankTargetsForRegionWith rankTargetCaptureValue
           pickAttack [] = Nothing
           pickAttack ((hr,_) : _) = Just (Move Us r hr (units - 1))
 
@@ -307,40 +331,41 @@ rotatingPlacement i rs =
                 Nothing -> accum
 
 
-someRegion :: Game -> Region
-someRegion g = Game.map g |> Game.regionsOwnedBy Us |> Set.elems |> head
+sortCandidatesByHighestRank :: (Region -> Region -> Game -> Double) -> Set Region -> Game -> [Region]
+sortCandidatesByHighestRank f rs g =
+    Set.elems rs |> map (\c -> (c, rankTargetsForRegionWith f c g))
+                 |> map extractRank |> onlyJust
+                 |> List.sortBy byRank |> reverse
+                 |> map (\(c, _) -> c)
+    where extractRank (c, []) = Nothing
+          extractRank (c, (_, rank) : _) = Just (c, rank)
 
 armyPlacer :: Integer -> Game -> Result [Placement]
 armyPlacer i g = 
-    Result placements 
-           (Just ( armiesLog ++ candidateLog ++ placementLog))
+    let placements = if captureCandidates == [] 
+                        then rotatingPlacement totalArmies tideCandidates
+                        else (rotatingPlacement captureArmies captureCandidates)
+                          ++ (rotatingPlacement tideArmies tideCandidates)
+        armiesLog = printf "[Log/Placer] total: %d cap: %d tide: %d\n"
+                            totalArmies captureArmies tideArmies
+        candidateLog = let capture = (captureCandidates |> map Sexp.sexp |> Sexp.namedList "CaptureCandidates")
+                           tide = tideCandidates |> map Sexp.sexp |> Sexp.namedList "TideCandidates"
+                       in printf "[Log/Placer] %s\n" (Sexp.fromList [capture, tide] |> Sexp.render)
+        placementLog = printf "[Log/Placer] %s\n" 
+                        (map Sexp.sexp placements |> Sexp.namedList "Placements"
+                                                  |> Sexp.render)
+    in Result placements
+              (Just (armiesLog ++ candidateLog ++ placementLog))
     where gm = Game.map g
-          armies = case Game.settings g |> Game.starting_armies of
-                        Just x -> x
-                        Nothing -> error "No starting armies set"
-          extractRank (c, []) = Nothing
-          extractRank (c, (_, rank) : _) = Just (c, rank)
-          sortedCandidates =
-            unsafeRegions g
-                |> Set.elems
-                |> map (\c -> (c, regionTargets c g))
-                |> map extractRank |> onlyJust
-                |> List.sortBy byRank |> reverse 
-                |> map (\(c, _) -> c)
-          checkedCandidates = if sortedCandidates == [] then [someRegion g]
-                              else sortedCandidates
-          placements = rotatingPlacement armies checkedCandidates 
-          armiesLog = "[Log/Placer] Have: " 
-                   ++ (show armies) ++ " armies to place.\n"
-          candidateLog = "[Log/Placer] " 
-                      ++ (checkedCandidates |> map Sexp.sexp 
-                                            |> Sexp.namedList "Candidates"
-                                            |> Sexp.render)
-                      ++ "\n"
-          placementLog = "[Log/Placer] " 
-                      ++ (map Sexp.sexp placements |> Sexp.namedList "Placements"
-                                                   |> Sexp.render)
-                      ++ "\n"
+          totalArmies = case Game.settings g |> Game.starting_armies of
+                            Just x -> x
+                            Nothing -> error "No starting armies set"
+          captureArmies = round ((realToFrac totalArmies) * captureFraction)
+          tideArmies = totalArmies - captureArmies
+          captureCandidates = regionsWithCapturableNeighbors minCaptureConfidence gm
+                                |> \cs -> sortCandidatesByHighestRank rankTargetCaptureValue cs g
+          tideCandidates = unsafeRegions gm \\ (Set.fromList captureCandidates)
+                            |> \cs -> sortCandidatesByHighestRank rankTargetPlacementValue cs g
 
 -- General strategy:
 --  Attack any territories we have a chance of defeating.
@@ -354,5 +379,6 @@ mover i g =
         moves = safeMoves ++ attackMoves
         log = moves |> map Sexp.sexp |> Sexp.namedList "Moves" |> Sexp.render
     in Result moves (Just ("[Log/Mover] " ++ log ++ "\n" ))
-    where safe = safeRegions g
-          unsafe = unsafeRegions g
+    where gm = Game.map g
+          safe = safeRegions gm
+          unsafe = unsafeRegions gm
