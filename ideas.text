@@ -1,0 +1,108 @@
+- Joint attack
+    - Where regions in the attack have less than the capture force
+- One territory attacking multiple territories
+    - Simple heuristic: If I have enough units to meet the cap force of
+      X of my neighbors, then attack all X.
+- Smart-ish troop movement, trying to meet the minimum cap force
+- Get better about capturing super regions
+    - Try to capture uncontested areas more..
+        - Region groups with a low number of border opponent regions
+- Multi-turn attacks (attack 5, attack 5, etc)
+    - May be a bad idea. Makes the territory more vulnerable
+- Use placements to discover frontlines
+- Try to play some defence, keep territories that border opponent regions
+  and are necessary to maintain the super region well supplied
+- Try and place units in an area where they have a better chance
+  of capturing a territory.
+    - Or maybe where they have a better chance of "turning the tide".
+- Try to optimize attack structure. I.e. Don't have every territory attack
+  the same region, try to spread the attack if possible.
+
+- Pick in super regions where the sum of the units in the super region
+  is smaller.
+
+
+
+
+!!- Fix bug where we don't recognize a territory is gone if it's not updated in
+    the update_map message. (mentioned on forum)
+
+!!- Tie bug where we get into a loop of putting all of our money on a single
+    territory and our only target region is doing the same. We never meet
+    min CAP so the game ties.
+
+!!- Fix bug where we allocate all units to the first region in the
+    region set (usually region 1) because we can't find any captureable regions.
+    Fall-back should be to list of unsafe regions (except in the beginning
+    we may want to keep "putting all our eggs in one basket" for at least
+    the first few turns).
+
+    - Maybe try and allocate a few units to "uncapturable" territories so that
+      we can form super regions and free up units adjacent to them. We might
+      even be able to limit this to situations where we have a completely
+      surrounded wasteland.
+
+:)- Basing income distribution off of capturability of neighbors seems like 
+    a good idea.
+
+- Maybe think about decreasing value of super-regions in the case where
+  A) We're already making a majority of the worlds income and B)
+  there's a bordering territory that has relatively few units on it compared
+  to other neighbors in the super region (or where a neighboring super region
+  has less units in it overall).
+
+  This should help with the case where we get a force behind enemy lines, where
+  they've transfered units out of.
+
+- Attack a territory with only the minimum required capture force
+  Maybe use a little extra if possible though. Sometimes reinforcements come
+  in before we can attack.
+
+  We could make this even smarter by basing it around the seen neighboring
+  regions of the territory we're attacking. (note: this can include neutral
+  regions that the opponent wants to attack)
+
+    - If we know that we can capture a given territory, and there are distant
+      territories still capturable, it makes sense to try and move extra units
+      towards those territories.
+
+      We may be able to frame this as "try to maintain capture superitory of
+      a super region." If we have more units in a super region than are
+      required to capture, we can transfer those units out.
+
+- Make regions that make another player loose a region rank highly, though
+  still balance that against regions that will give us a super region.
+  Income is important.
+
+- Try to get super regions that just have a few neutral territories in them.
+
+- Try to estimate the income of the opponent when possible, and try to make
+  it equalize (maybe).
+    - We can use the round number and map size to help with this estimation.
+      a good bot should have conquered most of the map we don't control by
+      the middle of the game.
+    - We can use their starting income + visible moves to identify if they've
+      explored other regions of the map (maybe). Like we can estimate what
+      their income would be if they only had territory around us and see
+      if it matches (maybe).
+    - It seems like if we had a large income disparity, the best strategy
+      would be to try and equalize income, by disabling their income, or
+      gaining more of our own. Disabling their income might be a better idea.
+    - We can use the opponent moves message to see transfers to regions
+      we can't actually see, and possible intuit the ownership of the
+      region.
+
+- Try to balance out units on the frontlines when possible. (This may be a good
+  way to do "joint attacks" if one territory can meet a large portion of the capture
+  force, then we could either try to spread to them to even their numbers after
+  capture, or we could subtract from their force and send those units back to
+  their origin territory.
+
+- Maybe try to pick a region that close to our other regions as our "starting region"
+
+!!- Try to allocate income to territories where it will equalize the balance of
+    the forces with its neighbors, If we easily have double the min CAP, no
+    need for extra units.
+
+Notes: Attacks seem to happen before transfers.
+    - No they don't.
