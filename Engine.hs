@@ -1,7 +1,9 @@
 module Engine where
 import qualified Game as Game
+import Game (RegionState(RegionState), Placement(..)) 
 import qualified Data.Set as Set
 import qualified Data.List as List
+import qualified Data.Map as Map
 import qualified Parse as Parse
 import qualified Owned as Owned
 import Owned (Owned, Owner(..), owner)
@@ -123,8 +125,12 @@ nextLine l e =
             , log
             , Game.setRegionState sr (Game.RegionState Us 2) gm |> newG )
             where Result sr log = (start_picker e) i rs g
-        UpdateMap ps -> Set.elems ps |> foldl (flip Game.applyPlacement) gm
-                                     |> newG |> emptyR
+        UpdateMap ps -> 
+            -- Just trust whatever update_map is telling us
+            Set.elems ps |> map (\(Placement o r c) -> (r, (RegionState o c)))
+                         |> Map.fromList
+                         |> \x -> gm { Game.states = x }
+                         |> newG |> emptyR
         OpponentMoves ms -> e |> emptyR
         PlaceArmies i -> 
             ( Just (placementsString ps g)
