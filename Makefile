@@ -21,4 +21,4 @@ clean:
 	rm -f $(bin) $(intfs) $(objs) $(zipname)
 
 zip:
-	git ls-files | zip $(zipname) -@
+	zip $(zipname) $(src)
