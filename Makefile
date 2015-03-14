@@ -21,4 +21,4 @@ clean:
 	rm -f $(bin) $(intfs) $(objs) $(zipname)
 
 zip:
-	zip $(zipname) $(src)
+	zip $(zipname) Makefile $(src)
