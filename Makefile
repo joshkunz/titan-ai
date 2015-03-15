@@ -4,7 +4,7 @@ bin = main
 
 zipname = obstack-warlight2.zip
 
-src = $(wildcard *.hs)
+src = $(shell find . -name "*.hs")
 intfs = $(patsubst %.hs,%.hi,$(src))
 objs = $(patsubst %.hs,%.o,$(src))
 

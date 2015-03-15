@@ -10,20 +10,6 @@ infixl 0 |>
 ($|) f x = f x
 infixr 1 $|
 
-choose :: (RealFrac a) => a -> a -> a
-choose n k = 
-    let choose_rec acc n k i 
-            | i > k = acc 
-            | otherwise = (acc * (n - (k - i))) / i 
-                            |> \a -> choose_rec a n k (i + 1)
-    in choose_rec 1 n k 1
-
-pBinom :: (RealFloat a) => a -> a -> a -> a
-pBinom p n k = (n `choose` k) * (p ** k) * ((1 - p) ** (n - k))
-
-cdfBinom :: (RealFloat a) => a -> a -> a -> a
-cdfBinom p n k = [0..(floor k)] |> map realToFrac |> map (pBinom p n) |> sum
-
 not_implemented s = error $ "not implemented: " ++ s
 unreachable s = error $ "unreachable: " ++ s
 
