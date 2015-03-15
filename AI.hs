@@ -136,7 +136,15 @@ attackMoves g =
         attackMap = Attack.attackableRegionMap gm
         rankedRegions = 
             Rank.groupMap Rank.targetCapture attackMap g |> map (\(r, _) -> r)
-     in Attack.assignAttacks rankedRegions attackMap hostileUnitMap friendlyUnitMap
+        capRound = Attack.orderedCAPPlanner Attack.basicCAPMover
+        fillRound = Attack.basicPlanner Attack.stuffingMover
+        doRound round (nPS, nUM) = Attack.applyRound round rankedRegions attackMap hostileUnitMap nUM nPS
+     in 
+        (Attack.emptyPlanSet, friendlyUnitMap)
+                |> doRound capRound 
+                |> doRound capRound
+                |> doRound fillRound
+                |> \(plan, _) -> Attack.assignAttacks plan
 
 -- General strategy:
 --  Attack any territories we have a chance of defeating.

@@ -14,6 +14,17 @@ import qualified AI.Constant as Constant
 import qualified AI.Always as Always
 import qualified AI.Game
 
+hostileUnitMap :: GameMap -> Map Region Integer
+hostileUnitMap gm =
+    AI.Game.attackableRegions gm 
+        |> Set.foldl (\m r -> Map.insert r (Always.units r gm) m) Map.empty
+
+friendlyUnitMap :: GameMap -> Map Region Integer
+friendlyUnitMap gm = 
+    AI.Game.unsafeRegions gm 
+        |> Set.foldl (\m r -> Map.insert r (usableRegionUnits r) m) Map.empty
+    where usableRegionUnits r = (Always.units r gm) - Constant.minReserveForce
+
 coopAttackCount :: Region -> Map Region (Set Region) -> Integer
 coopAttackCount r m =
     Map.foldl (\v rs -> v + (intForBool (Set.member r rs))) 0 m
@@ -43,9 +54,23 @@ attackableRegionMap gm =
             Map.insert hostile (Set.insert region current) map
             where current = if Map.member hostile map then map ! hostile else Set.empty
 
-type MoveState_ = (Integer, [Move], Map Region Integer)
-nextMove :: Region -> Integer -> MoveState_ -> Region -> MoveState_
-nextMove hostile minCap pass@(units, moves, unitMap) r =
+type MovePlan = Map Region Integer
+type AttackMap = Map Region [Region]
+type UnitMap = Map Region Integer
+type Planner = Region -> [Region] -> UnitMap -> UnitMap -> MovePlan -> (MovePlan, UnitMap)
+type MoveState = (Integer, MovePlan, UnitMap)
+type MovePlanSet = Map Region MovePlan
+type CAPMover = Region -> Integer -> MoveState -> Region -> MoveState
+
+emptyPlanSet = Map.empty :: MovePlanSet
+emptyPlan = Map.empty :: MovePlan
+
+-- 1. meet cap
+-- 2. try to double cap
+-- 3. commit any remaining units
+
+basicCAPMover :: Region -> Integer -> MoveState -> Region -> MoveState
+basicCAPMover hostile minCap pass@(units, curPlan, unitMap) r =
     let avail = unitMap ! r
         needed = minCap - units
         remaining = if needed > avail then 0 else avail - needed
@@ -53,42 +78,44 @@ nextMove hostile minCap pass@(units, moves, unitMap) r =
     in if needed == 0 then pass
        else if avail == 0 then pass
        else ( units + used
-            , ((Move Us r hostile used) : moves)
+            , Map.insert r used curPlan
             , Map.insert r remaining unitMap )
 
--- Takes a region to attack, a list of regions that can attack the region (in rank order)
--- And a mapping that reflects the currently available armies for each region.
--- This function returns a list of moves that realize this action, or none if the
--- action couldn't be completed, as well as a new mapping reflecting the units
--- used to realize the action.
-movesForRegion :: Region -> [Region] -> Map Region Integer -> Map Region Integer -> ([Move], Map Region Integer)
-movesForRegion h rs hUnitMap fUnitMap =
-    let hostileForces = hUnitMap ! h
+orderedCAPPlanner :: CAPMover -> Region -> [Region] -> UnitMap -> UnitMap -> MovePlan -> (MovePlan, UnitMap) 
+orderedCAPPlanner f hostile attacking hostileMap friendlyMap curPlan =
+    let hostileForces = hostileMap ! hostile
         minCap = Prob.forceOnlyMinimumCaptureForce hostileForces Constant.minCaptureConfidence
-        availForces = map (\r -> fUnitMap ! r) rs |> sum
-    in if availForces < minCap then ([], fUnitMap) 
-       else foldl (nextMove h minCap) (0, [], fUnitMap) rs 
-                |> \(_, ms, unitMap) -> (ms, unitMap)
+        availableForces = map (\r -> friendlyMap ! r) attacking |> sum
+    in if availableForces < minCap then (curPlan, friendlyMap)
+       else foldl (f hostile minCap) (0, emptyPlan, friendlyMap) attacking
+                |> \(_, plan, unitMap) -> (Map.unionWith (+) curPlan plan, unitMap)
 
-hostileUnitMap :: GameMap -> Map Region Integer
-hostileUnitMap gm =
-    AI.Game.attackableRegions gm 
-        |> Set.foldl (\m r -> Map.insert r (Always.units r gm) m) Map.empty
+stuffingMover :: Region -> (MovePlan, UnitMap) -> (MovePlan, UnitMap)
+stuffingMover r (plan, map) =
+    let avail = map ! r in
+        if avail > 0 then 
+            ( Map.insert r avail plan
+            , Map.insert r 0 map ) 
+        else (plan, map)
 
-friendlyUnitMap :: GameMap -> Map Region Integer
-friendlyUnitMap gm = 
-    AI.Game.unsafeRegions gm 
-        |> Set.foldl (\m r -> Map.insert r (Always.units r gm) m) Map.empty
+type BasicMover = Region -> (MovePlan, UnitMap) -> (MovePlan, UnitMap)
+basicPlanner :: BasicMover -> Region -> [Region] -> UnitMap -> UnitMap -> MovePlan -> (MovePlan, UnitMap)
+basicPlanner f hostile attacking hostileMap friendlyMap curPlan =
+    foldl (flip f) (emptyPlan, friendlyMap) attacking 
+        |> \(plan, map) -> ((Map.unionWith (+) curPlan plan), map)
 
--- Takes a ranked list of hostile regions, a mapping from hostile regions to
--- the set of friendly regions that are capable of attacking them and a mapping
--- from friendly regions to the number of units they can allocate to any attack
--- this round. It returns a list of moves for this round to accomplish as many
--- attacks as possible in rank order.
-assignAttacks :: [Region] -> Map Region [Region] -> Map Region Integer -> Map Region Integer -> [Move]
-assignAttacks ranked attackMap hUnitMap fUnitMap =
-    foldl nextAttacks ([], fUnitMap) ranked |> \(moves, _) -> moves
-    where nextAttacks (cMoves, unitMap) r = 
-            let (nextMoves, nextunitMap) = movesForRegion r (attackMap ! r) hUnitMap unitMap
-            in ((cMoves ++ nextMoves), nextunitMap)
-                        
+applyRound :: Planner -> [Region] -> AttackMap -> UnitMap -> UnitMap -> MovePlanSet -> (MovePlanSet, UnitMap)
+applyRound planner ranked attackMap hostileMap friendlyMap plans =
+    foldl nextPlan (plans, friendlyMap) ranked
+    where nextPlan (cPlans, unitMap) r = 
+            let currentPlan = if Map.member r cPlans then cPlans ! r else emptyPlan
+                (nextPlan, nextUnitMap) = planner r (attackMap ! r) hostileMap friendlyMap currentPlan
+            in ((Map.insert r nextPlan cPlans), nextUnitMap)
+
+assignAttacks :: MovePlanSet -> [Move]
+assignAttacks ps = 
+    Map.foldlWithKey outerFolder [] ps
+    where outerFolder moves hostile movePlan = 
+                (Map.foldlWithKey (innerFolder hostile) [] movePlan) ++ moves
+          innerFolder hostile moves ours units = 
+            if units == 0 then moves else (Move Us ours hostile units) : moves
