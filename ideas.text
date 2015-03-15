@@ -1,3 +1,31 @@
+### Bug Fixes
+DONE- Fix bug where we don't recognize a territory is gone if it's not updated in
+    the update_map message. (mentioned on forum)
+
+DONE- Tie bug where we get into a loop of putting all of our money on a single
+    territory and our only target region is doing the same. We never meet
+    min CAP so the game ties.
+
+    --> Fixed by using a portion of our income for non-attacking, but unsafe
+    territories to try and get them to expand the income stream.
+
+DONE- Fix bug where we allocate all units to the first region in the
+    region set (usually region 1) because we can't find any captureable regions.
+    Fall-back should be to list of unsafe regions (except in the beginning
+    we may want to keep "putting all our eggs in one basket" for at least
+    the first few turns).
+
+    - Maybe try and allocate a few units to "uncapturable" territories so that
+      we can form super regions and free up units adjacent to them. We might
+      even be able to limit this to situations where we have a completely
+      surrounded wasteland.
+
+    --> Fixed using the same method as the above
+
+:)- Basing income distribution off of capturability of neighbors seems like 
+    a good idea.
+
+### Ideas
 - Joint attack
     - Where regions in the attack have less than the capture force
 - One territory attacking multiple territories
@@ -20,30 +48,6 @@
 
 - Pick in super regions where the sum of the units in the super region
   is smaller.
-
-
-
-
-!!- Fix bug where we don't recognize a territory is gone if it's not updated in
-    the update_map message. (mentioned on forum)
-
-!!- Tie bug where we get into a loop of putting all of our money on a single
-    territory and our only target region is doing the same. We never meet
-    min CAP so the game ties.
-
-!!- Fix bug where we allocate all units to the first region in the
-    region set (usually region 1) because we can't find any captureable regions.
-    Fall-back should be to list of unsafe regions (except in the beginning
-    we may want to keep "putting all our eggs in one basket" for at least
-    the first few turns).
-
-    - Maybe try and allocate a few units to "uncapturable" territories so that
-      we can form super regions and free up units adjacent to them. We might
-      even be able to limit this to situations where we have a completely
-      surrounded wasteland.
-
-:)- Basing income distribution off of capturability of neighbors seems like 
-    a good idea.
 
 - Maybe think about decreasing value of super-regions in the case where
   A) We're already making a majority of the worlds income and B)

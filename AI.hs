@@ -15,8 +15,9 @@ import Graph (Edge(..), Graph(..))
 import Text.Printf (printf)
 
 import AI.Common (onlyJust, enumerate)
-import AI.Constant as Constant
+import qualified AI.Constant as Constant
 import qualified AI.Always as Always
+import qualified AI.Attack as Attack
 import qualified AI.Rank as Rank
 import qualified AI.Game
 
@@ -46,6 +47,20 @@ startPicker i rs g =
                      ++ (Sexp.c_namedSet "Regions" rs |> Sexp.render)
                      ++ "\n")
 
+-- Assume the regions are in ranked order, try to allocate them in rank order
+-- with higher ranked regions getting a larger share of the pie
+weightedPlacement :: Integer -> [Region] -> [Placement]
+weightedPlacement armies rs =
+    foldl nextPlacement (armies, []) (enumerate rs) |> \(_, pls) -> pls
+    where totalRs = (length rs |> toInteger)
+          nextPlacement pass@(avail, pls) (i, r) =
+            let placed = avail - (avail `div` Constant.allocationFactor)
+                rest = avail - placed
+            in if avail == 0 then pass
+               else if i == (totalRs - 1) then (0, (Placement Us r avail) : pls)
+               else (rest, (Placement Us r placed) : pls)
+
+-- try to place an equal number on all of the given regions
 rotatingPlacement :: Integer -> [Region] -> [Placement]
 rotatingPlacement i rs = 
     foldl pFold [] (enumerate rs)
@@ -58,7 +73,6 @@ rotatingPlacement i rs =
               case regionPlacement i r of
                 Just p -> p : accum 
                 Nothing -> accum
-
 
 sortCandidatesByHighestRank :: Rank.RegionRank -> Set Region -> Game -> [Region]
 sortCandidatesByHighestRank f rs g =
@@ -73,15 +87,15 @@ sortCandidatesByHighestRank f rs g =
 
 armyPlacer :: Integer -> Game -> Result [Placement]
 armyPlacer i g = 
-    let placements = if captureCandidates == [] 
-                        then rotatingPlacement totalArmies tideCandidates
-                        else (rotatingPlacement captureArmies captureCandidates)
-                          ++ (rotatingPlacement tideArmies tideCandidates)
-        armiesLog = printf "[Log/Placer] total: %d cap: %d tide: %d\n"
-                            totalArmies captureArmies tideArmies
-        candidateLog = let capture = (captureCandidates |> map Sexp.sexp |> Sexp.namedList "CaptureCandidates")
-                           tide = tideCandidates |> map Sexp.sexp |> Sexp.namedList "TideCandidates"
-                       in printf "[Log/Placer] %s\n" (Sexp.fromList [capture, tide] |> Sexp.render)
+    let placements = 
+            candidates |> \cs -> sortCandidatesByHighestRank Rank.targetCapture cs g
+                       |> weightedPlacement totalArmies
+        armiesLog = printf "[Log/Placer] Income: %d \n" totalArmies 
+        candidateLog = 
+            printf "[Log/Placer] %s\n" 
+                   (Set.elems candidates |> map Sexp.sexp
+                                         |> Sexp.namedList "Candidates" 
+                                         |> Sexp.render)
         placementLog = printf "[Log/Placer] %s\n" 
                         (map Sexp.sexp placements |> Sexp.namedList "Placements"
                                                   |> Sexp.render)
@@ -91,12 +105,7 @@ armyPlacer i g =
           totalArmies = case Game.settings g |> Game.starting_armies of
                             Just x -> x
                             Nothing -> error "No starting armies set"
-          captureArmies = round ((realToFrac totalArmies) * captureFraction)
-          tideArmies = totalArmies - captureArmies
-          captureCandidates = AI.Game.regionsWithCapturableNeighbors minCaptureConfidence gm
-                                |> \cs -> sortCandidatesByHighestRank Rank.targetCapture cs g
-          tideCandidates = AI.Game.unsafeRegions gm \\ (Set.fromList captureCandidates)
-                            |> \cs -> sortCandidatesByHighestRank Rank.targetPlacement cs g
+          candidates = AI.Game.unsafeRegions gm
 
 moveForSafeRegion :: Region -> Game -> Maybe Move
 moveForSafeRegion r g =
@@ -112,32 +121,28 @@ moveForSafeRegion r g =
           graph = Game.graph gm
           isUnsafe r = not (AI.Game.isSafeRegion r gm)
 
-
-moveAttackBasic :: Region -> Game -> Maybe Move
-moveAttackBasic r g =
-    let possibleTargets = 
-            AI.Game.hostileNeighbors r gm |> Set.filter capturableAtConfidence 
-    in if possibleTargets /= Set.empty then
-        Rank.naive Rank.targetCapture possibleTargets r g |> pickAttack
-       else Nothing
+safeMoves :: Game -> [Move]
+safeMoves g = 
+    AI.Game.safeRegions gm |> Set.elems
+                           |> map ((flip moveForSafeRegion) g) 
+                           |> onlyJust
     where gm = Game.map g
-          units = Always.units r gm
-          capturableAtConfidence r = AI.Game.isCapturable r units Constant.minCaptureConfidence gm
-          pickAttack [] = Nothing
-          pickAttack ((hr,_) : _) = Just (Move Us r hr (units - 1))
+
+attackMoves :: Game -> [Move]
+attackMoves g = 
+    let gm = Game.map g
+        hostileUnitMap = Attack.hostileUnitMap gm
+        friendlyUnitMap = Attack.friendlyUnitMap gm
+        attackMap = Attack.attackableRegionMap gm
+        rankedRegions = 
+            Rank.groupMap Rank.targetCapture attackMap g |> map (\(r, _) -> r)
+     in Attack.assignAttacks rankedRegions attackMap hostileUnitMap friendlyUnitMap
 
 -- General strategy:
 --  Attack any territories we have a chance of defeating.
 --  Move units bordered completely by friendly territory towards the frontline
 mover :: Integer -> Game -> Result [Move]
 mover i g = 
-    let safeMoves = Set.elems safe 
-                        |> map ((flip moveForSafeRegion) g) |> onlyJust
-        attackMoves = Set.elems unsafe 
-                        |> map ((flip moveAttackBasic) g) |> onlyJust
-        moves = safeMoves ++ attackMoves
+    let moves = (safeMoves g) ++ (attackMoves g)
         log = moves |> map Sexp.sexp |> Sexp.namedList "Moves" |> Sexp.render
     in Result moves (Just ("[Log/Mover] " ++ log ++ "\n" ))
-    where gm = Game.map g
-          safe = AI.Game.safeRegions gm
-          unsafe = AI.Game.unsafeRegions gm

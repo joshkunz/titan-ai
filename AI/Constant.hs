@@ -1,5 +1,8 @@
 module AI.Constant where
 
+-- The fraction we allocate at, 2 = 1/2 of the armies each weight
+allocationFactor = 2
+
 -- The minimum income we can obtain
 minIncome = 5
 

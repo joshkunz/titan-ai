@@ -2,13 +2,15 @@ module AI.Rank where
 import qualified Data.Set as Set
 import Data.Set (Set)
 import qualified Data.List as List
+import qualified Data.Map as Map
+import Data.Map (Map)
 import qualified Game as Game
 import qualified Owned as Owned
 import Owned(Owner(..)) 
 import Game (Region(..), SuperRegion(..), GameMap, Game)
 import Common ((|>), not_implemented)
 
-import AI.Common (divApprox)
+import AI.Common (divApprox, average)
 import qualified AI.Constant as Constant
 import qualified AI.Always as Always
 import qualified AI.Game
@@ -58,14 +60,21 @@ targetPlacement src t g =
 byRank :: (Region, Double) -> (Region, Double) -> Ordering
 byRank (_, ra) (_, rb) = compare ra rb
 
+groupSingle :: RegionRank -> Region -> [Region] -> Game -> Double
+groupSingle f h rs g = map (\r -> f r h g) rs |> average
+
+groupMap :: RegionRank -> Map Region [Region] -> Game -> [(Region, Double)]
+groupMap f m g = 
+    Map.foldlWithKey nextRank [] m |> List.sortBy byRank |> reverse
+    where nextRank l hostile attks = (hostile, groupSingle f hostile attks g) : l
+
 naive :: RegionRank -> Set Region -> Region -> Game -> [(Region, Double)]
 naive f rs r g =
     Set.foldl rankFold Set.empty rs
         |> Set.elems
         |> List.sortBy byRank
         |> reverse
-    where gm = Game.map g
-          rankFold acc target = (Set.insert (target, (f r target g)) acc)
+    where rankFold acc target = (Set.insert (target, (f r target g)) acc)
 
 ordered :: RegionOrder -> Set Region -> Region -> Game -> [(Region, Double)]
 ordered = not_implemented "AI.Rank.ordered"

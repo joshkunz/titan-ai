@@ -28,6 +28,12 @@ safeRegions gm = Game.regionsOwnedBy Us gm |> Set.filter ((flip isSafeRegion) gm
 unsafeRegions :: GameMap -> Set Region
 unsafeRegions gm = Game.regionsOwnedBy Us gm \\ (safeRegions gm)
 
+attackableRegions :: GameMap -> Set Region
+attackableRegions gm =
+    unsafeRegions gm |> Set.elems 
+                     |> map (\r -> hostileNeighbors r gm)
+                     |> Set.unions
+
 isCapturable :: Region -> Integer -> Double -> GameMap -> Bool
 isCapturable r units confidence gm = (Prob.capture r units gm) >= confidence
 
