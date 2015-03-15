@@ -102,7 +102,7 @@ type BasicMover = Region -> (MovePlan, UnitMap) -> (MovePlan, UnitMap)
 basicPlanner :: BasicMover -> Region -> [Region] -> UnitMap -> UnitMap -> MovePlan -> (MovePlan, UnitMap)
 basicPlanner f hostile attacking hostileMap friendlyMap curPlan =
     -- Hack to disable this rule unless we already have a CAP plan.
-    if curPlan == emptyPlan then (curPlan, map) 
+    if curPlan == emptyPlan then (curPlan, friendlyMap) 
     else foldl (flip f) (emptyPlan, friendlyMap) attacking 
             |> \(plan, map) -> ((Map.unionWith (+) curPlan plan), map)
 
