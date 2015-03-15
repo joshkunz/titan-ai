@@ -101,8 +101,10 @@ stuffingMover r (plan, map) =
 type BasicMover = Region -> (MovePlan, UnitMap) -> (MovePlan, UnitMap)
 basicPlanner :: BasicMover -> Region -> [Region] -> UnitMap -> UnitMap -> MovePlan -> (MovePlan, UnitMap)
 basicPlanner f hostile attacking hostileMap friendlyMap curPlan =
-    foldl (flip f) (emptyPlan, friendlyMap) attacking 
-        |> \(plan, map) -> ((Map.unionWith (+) curPlan plan), map)
+    -- Hack to disable this rule unless we already have a CAP plan.
+    if curPlan == emptyPlan then (curPlan, map) 
+    else foldl (flip f) (emptyPlan, friendlyMap) attacking 
+            |> \(plan, map) -> ((Map.unionWith (+) curPlan plan), map)
 
 applyRound :: Planner -> [Region] -> AttackMap -> UnitMap -> UnitMap -> MovePlanSet -> (MovePlanSet, UnitMap)
 applyRound planner ranked attackMap hostileMap friendlyMap plans =
