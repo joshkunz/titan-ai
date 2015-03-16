@@ -128,6 +128,10 @@ safeMoves g =
                            |> onlyJust
     where gm = Game.map g
 
+-- 1. meet cap
+-- 2. try to double cap
+-- 3. commit any remaining units
+
 attackMoves :: Game -> [Move]
 attackMoves g = 
     let gm = Game.map g
@@ -136,15 +140,13 @@ attackMoves g =
         attackMap = Attack.attackableRegionMap gm
         rankedRegions = 
             Rank.groupMap Rank.targetCapture attackMap g |> map (\(r, _) -> r)
-        capRound = Attack.orderedCAPPlanner Attack.basicCAPMover
-        fillRound = Attack.basicPlanner Attack.stuffingMover
-        doRound round (nPS, nUM) = Attack.applyRound round rankedRegions attackMap hostileUnitMap nUM nPS
+        incRound planner (plans, newuMap) = 
+            Attack.incrementExistingPlans planner rankedRegions attackMap hostileUnitMap newuMap plans
      in 
-        (Attack.emptyPlanSet, friendlyUnitMap)
-                |> doRound capRound 
-                |> doRound capRound
-                |> doRound fillRound
-                |> \(plan, _) -> Attack.assignAttacks plan
+        Attack.initialPlans Attack.capPlanner rankedRegions attackMap hostileUnitMap friendlyUnitMap
+            |> incRound Attack.capPlanner
+            |> incRound Attack.fillPlanner
+            |> \(plans, _) -> Attack.movesForPlans plans
 
 -- General strategy:
 --  Attack any territories we have a chance of defeating.

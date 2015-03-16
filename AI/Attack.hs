@@ -14,15 +14,32 @@ import qualified AI.Constant as Constant
 import qualified AI.Always as Always
 import qualified AI.Game
 
-hostileUnitMap :: GameMap -> Map Region Integer
+-- A mapping showing how many units are in each region
+data UnitMap = Hostile (Map Region Integer) | Friendly (Map Region Integer) 
+-- Mapping from friendly regions to the number of units we'll use from that
+-- region in this attack plan
+type MovePlan = Map Region Integer
+-- Mapping from hostile regions to their move plans, used between move rounds
+type MovePlanSet = Map Region MovePlan
+-- A mapping from hostile regions to the list of friendly regions that can attack them
+type AttackMap = Map Region [Region]
+
+-- Hostile Region -> [Friendly Region] 
+--                -> Hostile Unit Map -> Friendly UnitMap 
+--                -> Current Move Plan -> (New Move Plan, New Friendly Unit Map)
+type Planner = Region -> Integer -> [Region] -> UnitMap -> (MovePlan, UnitMap)
+
+hostileUnitMap :: GameMap -> UnitMap
 hostileUnitMap gm =
     AI.Game.attackableRegions gm 
         |> Set.foldl (\m r -> Map.insert r (Always.units r gm) m) Map.empty
+        |> Hostile
 
-friendlyUnitMap :: GameMap -> Map Region Integer
+friendlyUnitMap :: GameMap -> UnitMap 
 friendlyUnitMap gm = 
     AI.Game.unsafeRegions gm 
         |> Set.foldl (\m r -> Map.insert r (usableRegionUnits r) m) Map.empty
+        |> Friendly
     where usableRegionUnits r = (Always.units r gm) - Constant.minReserveForce
 
 coopAttackCount :: Region -> Map Region (Set Region) -> Integer
@@ -54,68 +71,57 @@ attackableRegionMap gm =
             Map.insert hostile (Set.insert region current) map
             where current = if Map.member hostile map then map ! hostile else Set.empty
 
-type MovePlan = Map Region Integer
-type AttackMap = Map Region [Region]
-type UnitMap = Map Region Integer
-type Planner = Region -> [Region] -> UnitMap -> UnitMap -> MovePlan -> (MovePlan, UnitMap)
-type MoveState = (Integer, MovePlan, UnitMap)
-type MovePlanSet = Map Region MovePlan
-type CAPMover = Region -> Integer -> MoveState -> Region -> MoveState
 
-emptyPlanSet = Map.empty :: MovePlanSet
 emptyPlan = Map.empty :: MovePlan
+emptyPlanSet = Map.empty :: MovePlanSet
 
--- 1. meet cap
--- 2. try to double cap
--- 3. commit any remaining units
+initialPlans :: Planner -> [Region] -> AttackMap -> UnitMap -> UnitMap -> (MovePlanSet, UnitMap)
+initialPlans planner ranked attackMap (Hostile hUnitMap) fUnitMap =
+    foldl nextPlan (emptyPlanSet, fUnitMap) ranked
+    where nextPlan (planSet, unitMap) h =
+            planner h (hUnitMap ! h) (attackMap ! h) unitMap 
+                |> \(plan, newMap) -> (addPlan h plan planSet, newMap)
+          addPlan h plan planSet = 
+            if plan /= emptyPlan then Map.insert h plan planSet else planSet
 
-basicCAPMover :: Region -> Integer -> MoveState -> Region -> MoveState
-basicCAPMover hostile minCap pass@(units, curPlan, unitMap) r =
-    let avail = unitMap ! r
-        needed = minCap - units
-        remaining = if needed > avail then 0 else avail - needed
-        used = avail - remaining
-    in if needed == 0 then pass
-       else if avail == 0 then pass
-       else ( units + used
-            , Map.insert r used curPlan
-            , Map.insert r remaining unitMap )
+incrementExistingPlans :: Planner -> [Region] -> AttackMap -> UnitMap -> UnitMap -> MovePlanSet -> (MovePlanSet, UnitMap)
+incrementExistingPlans planner ranked attackMap (Hostile hUnitMap) fUnitMap plans =
+    foldl addPlan (plans, fUnitMap) ranked
+    where addPlan (planSet, unitMap) h =
+            case Map.lookup h planSet of 
+                Just plan | plan /= emptyPlan -> planner h (hUnitMap ! h) (attackMap ! h) unitMap 
+                                                    |> \(newPlan, newMap) -> (incPlan h plan newPlan planSet, newMap)
+                          | otherwise -> (planSet, unitMap)
+                Nothing -> (planSet, unitMap)
+          incPlan h plan newPlan planSet 
+            | newPlan == emptyPlan = planSet
+            | otherwise = Map.insert h (Map.unionWith (+) plan newPlan) planSet
 
-orderedCAPPlanner :: CAPMover -> Region -> [Region] -> UnitMap -> UnitMap -> MovePlan -> (MovePlan, UnitMap) 
-orderedCAPPlanner f hostile attacking hostileMap friendlyMap curPlan =
-    let hostileForces = hostileMap ! hostile
-        minCap = Prob.forceOnlyMinimumCaptureForce hostileForces Constant.minCaptureConfidence
-        availableForces = map (\r -> friendlyMap ! r) attacking |> sum
-    in if availableForces < minCap then (curPlan, friendlyMap)
-       else foldl (f hostile minCap) (0, emptyPlan, friendlyMap) attacking
-                |> \(_, plan, unitMap) -> (Map.unionWith (+) curPlan plan, unitMap)
+capPlanner :: Region -> Integer -> [Region] -> UnitMap -> (MovePlan, UnitMap) 
+capPlanner h hForces attacking orig@(Friendly uMap) =
+    foldl picker (0, emptyPlan) attacking |> updateuMap
+    where minCap = Prob.forceOnlyMinimumCaptureForce hForces Constant.minCaptureConfidence
+          picker pass@(committed, plan) r =
+            let avail = uMap ! r
+                needed = minCap - committed
+                remaining = if needed > avail then 0 else avail - needed
+                used = avail - remaining
+            in if needed == 0 then pass
+               else if avail == 0 then pass
+               else (committed + used, Map.insert r used plan)
+          updateuMap (committed, plan) = 
+            if committed < minCap then (emptyPlan, orig)
+            -- Subtract the units we committed in the plan, from the given uMap
+            else (plan, Friendly (Map.unionWith (-) uMap plan))
 
-stuffingMover :: Region -> (MovePlan, UnitMap) -> (MovePlan, UnitMap)
-stuffingMover r (plan, map) =
-    let avail = map ! r in
-        if avail > 0 then 
-            ( Map.insert r avail plan
-            , Map.insert r 0 map ) 
-        else (plan, map)
+-- Generate a plan that uses the rest of the units in the attacking territory
+fillPlanner :: Region -> Integer -> [Region] -> UnitMap -> (MovePlan, UnitMap)
+fillPlanner h hForces attacking (Friendly uMap) =
+    Map.filterWithKey (\r units -> r `elem` attacking && units > 0) uMap
+        |> \plan -> (plan, Friendly (Map.unionWith (-) uMap plan))
 
-type BasicMover = Region -> (MovePlan, UnitMap) -> (MovePlan, UnitMap)
-basicPlanner :: BasicMover -> Region -> [Region] -> UnitMap -> UnitMap -> MovePlan -> (MovePlan, UnitMap)
-basicPlanner f hostile attacking hostileMap friendlyMap curPlan =
-    -- Hack to disable this rule unless we already have a CAP plan.
-    if curPlan == emptyPlan then (curPlan, friendlyMap) 
-    else foldl (flip f) (emptyPlan, friendlyMap) attacking 
-            |> \(plan, map) -> ((Map.unionWith (+) curPlan plan), map)
-
-applyRound :: Planner -> [Region] -> AttackMap -> UnitMap -> UnitMap -> MovePlanSet -> (MovePlanSet, UnitMap)
-applyRound planner ranked attackMap hostileMap friendlyMap plans =
-    foldl nextPlan (plans, friendlyMap) ranked
-    where nextPlan (cPlans, unitMap) r = 
-            let currentPlan = if Map.member r cPlans then cPlans ! r else emptyPlan
-                (nextPlan, nextUnitMap) = planner r (attackMap ! r) hostileMap friendlyMap currentPlan
-            in ((Map.insert r nextPlan cPlans), nextUnitMap)
-
-assignAttacks :: MovePlanSet -> [Move]
-assignAttacks ps = 
+movesForPlans :: MovePlanSet -> [Move]
+movesForPlans ps = 
     Map.foldlWithKey outerFolder [] ps
     where outerFolder moves hostile movePlan = 
                 (Map.foldlWithKey (innerFolder hostile) [] movePlan) ++ moves
