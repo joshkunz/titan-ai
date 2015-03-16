@@ -25,13 +25,31 @@ DONE- Fix bug where we allocate all units to the first region in the
 :)- Basing income distribution off of capturability of neighbors seems like 
     a good idea.
 
-### Ideas
-- Joint attack
+DONE- Joint attack
     - Where regions in the attack have less than the capture force
-- One territory attacking multiple territories
+
+DONE- One territory attacking multiple territories
     - Simple heuristic: If I have enough units to meet the cap force of
       X of my neighbors, then attack all X.
+
+    - Try to optimize attack structure. I.e. Don't have every territory attack
+      the same region, try to spread the attack if possible.
+
+### Ideas
+- Try to get super regions that just have a few neutral territories in them.
+
 - Smart-ish troop movement, trying to meet the minimum cap force
+
+!!- Try to allocate income to territories where it will equalize the balance of
+    the forces with its neighbors, If we easily have double the min CAP, no
+    need for extra units.
+
+- Try to balance out units on the frontlines when possible. (This may be a good
+  way to do "joint attacks" if one territory can meet a large portion of the capture
+  force, then we could either try to spread to them to even their numbers after
+  capture, or we could subtract from their force and send those units back to
+  their origin territory.
+
 - Get better about capturing super regions
     - Try to capture uncontested areas more..
         - Region groups with a low number of border opponent regions
@@ -43,8 +61,6 @@ DONE- Fix bug where we allocate all units to the first region in the
 - Try and place units in an area where they have a better chance
   of capturing a territory.
     - Or maybe where they have a better chance of "turning the tide".
-- Try to optimize attack structure. I.e. Don't have every territory attack
-  the same region, try to spread the attack if possible.
 
 - Pick in super regions where the sum of the units in the super region
   is smaller.
@@ -78,8 +94,6 @@ DONE- Fix bug where we allocate all units to the first region in the
   still balance that against regions that will give us a super region.
   Income is important.
 
-- Try to get super regions that just have a few neutral territories in them.
-
 - Try to estimate the income of the opponent when possible, and try to make
   it equalize (maybe).
     - We can use the round number and map size to help with this estimation.
@@ -96,17 +110,7 @@ DONE- Fix bug where we allocate all units to the first region in the
       we can't actually see, and possible intuit the ownership of the
       region.
 
-- Try to balance out units on the frontlines when possible. (This may be a good
-  way to do "joint attacks" if one territory can meet a large portion of the capture
-  force, then we could either try to spread to them to even their numbers after
-  capture, or we could subtract from their force and send those units back to
-  their origin territory.
-
 - Maybe try to pick a region that close to our other regions as our "starting region"
-
-!!- Try to allocate income to territories where it will equalize the balance of
-    the forces with its neighbors, If we easily have double the min CAP, no
-    need for extra units.
 
 Notes: Attacks seem to happen before transfers.
     - No they don't.
