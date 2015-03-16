@@ -143,9 +143,10 @@ attackMoves g =
         incRound planner (plans, newuMap) = 
             Attack.incrementExistingPlans planner rankedRegions attackMap hostileUnitMap newuMap plans
      in 
-        Attack.initialPlans Attack.capPlanner rankedRegions attackMap hostileUnitMap friendlyUnitMap
-            |> incRound Attack.capPlanner
-            |> incRound Attack.fillPlanner
+        Attack.initialPlans (Attack.capPlanner 1) rankedRegions attackMap hostileUnitMap friendlyUnitMap
+            |> incRound (Attack.capPlanner 1)
+            |> incRound (Attack.capPlanner 2)
+            |> incRound (Attack.capPlanner 2)
             |> \(plans, _) -> Attack.movesForPlans plans
 
 -- General strategy:

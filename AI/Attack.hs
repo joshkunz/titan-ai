@@ -97,10 +97,10 @@ incrementExistingPlans planner ranked attackMap (Hostile hUnitMap) fUnitMap plan
             | newPlan == emptyPlan = planSet
             | otherwise = Map.insert h (Map.unionWith (+) plan newPlan) planSet
 
-capPlanner :: Region -> Integer -> [Region] -> UnitMap -> (MovePlan, UnitMap) 
-capPlanner h hForces attacking orig@(Friendly uMap) =
+capPlanner :: Integer -> Region -> Integer -> [Region] -> UnitMap -> (MovePlan, UnitMap) 
+capPlanner factor h hForces attacking orig@(Friendly uMap) =
     foldl picker (0, emptyPlan) attacking |> updateuMap
-    where minCap = Prob.forceOnlyMinimumCaptureForce hForces Constant.minCaptureConfidence
+    where minCap = (Prob.forceOnlyMinimumCaptureForce hForces Constant.minCaptureConfidence) `div` factor
           picker pass@(committed, plan) r =
             let avail = uMap ! r
                 needed = minCap - committed
