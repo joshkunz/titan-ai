@@ -249,7 +249,10 @@ regionsOwnedBy o gm  =
 
 applyPlacement :: Placement -> GameMap -> GameMap
 applyPlacement (Placement o region count) gm =
-    RegionState o count |> \rs -> setRegionState region rs gm
+    let nextState = case stateForRegion region gm of
+                        Just (RegionState _ cCount) ->  RegionState o (count + cCount)
+                        Nothing -> RegionState o count
+    in setRegionState region nextState gm
 
 applyPlacementGame :: Placement -> Game -> Game
 applyPlacementGame p g = Game.map g |> applyPlacement p |> (flip setMap) g
