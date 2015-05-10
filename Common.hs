@@ -1,4 +1,5 @@
 module Common where
+import qualified Data.List as List
 
 -- Lower precedence reverse application operator
 (|>) :: a -> (a -> b) -> b
@@ -59,3 +60,6 @@ rargs3 f a3 a1 a2 = f a1 a2 a3
 
 rargs4 :: (a -> b -> c -> d -> e) -> d -> a -> b -> c -> e
 rargs4 f a4 a1 a2 a3 = f a1 a2 a3 a4
+
+sortOn :: (Ord a) => (b -> a) -> [b] -> [b]
+sortOn f = List.sortBy (\a b -> (compare (f a) (f b)))

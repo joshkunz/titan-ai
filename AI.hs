@@ -9,7 +9,7 @@ import qualified Game as Game
 import Engine (Result(..))
 import qualified Sexp as Sexp
 import Owned (Owner(..))
-import Common ((|>))
+import Common ((|>), sortOn)
 import qualified Graph as Graph
 import Graph (Edge(..), Graph(..)) 
 import Text.Printf (printf)
@@ -34,7 +34,7 @@ type StartRanker = Region -> Game -> Double
 rankStartingRegions :: StartRanker -> Set Region -> Game -> [Region]
 rankStartingRegions f rs g =
     Set.elems rs |> map (\r -> (r, f r g))
-                 |> List.sortOn (\(_, rank) -> rank)
+                 |> sortOn (\(_, rank) -> rank)
                  |> reverse
                  |> map (\(r, _) -> r)
 
