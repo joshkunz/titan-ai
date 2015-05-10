@@ -47,6 +47,7 @@ targetCapture _ r@(Region _ sr) g =
                  `divApprox` (Set.size (Always.neighbors r graph))
           allInSr = Game.regionsInSuperRegion sr gm
           oursInSr = Set.filter (\r -> Game.regionOwnedBy r Us gm) allInSr
+          -- How much of the target super region do we own?
           superRegionCoverFraction = (Set.size oursInSr)
                          `divApprox` (Set.size allInSr)
 

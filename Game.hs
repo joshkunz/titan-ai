@@ -1,8 +1,10 @@
 module Game where
+import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.Foldable as Foldable
 import qualified Data.Maybe as Maybe
+import Control.Monad (liftM2)
 import qualified Graph as Graph
 import qualified Sexp as Sexp
 import qualified Owned as Owned
@@ -233,6 +235,12 @@ stateForRegion r gm = Map.lookup r (states gm)
 
 unitsInRegion :: Region -> GameMap -> Maybe Integer
 unitsInRegion r gm = stateForRegion r gm |> fmap units 
+
+unitsInSuperRegion :: SuperRegion -> GameMap -> Maybe Integer
+unitsInSuperRegion sr gm =
+    regionsInSuperRegion sr gm |> Set.elems
+                               |> List.map (\r -> unitsInRegion r gm)
+                               |> foldl (liftM2 (+)) (Just 0)
 
 regionOwner :: Region -> GameMap -> Maybe Owner
 regionOwner r gm = stateForRegion r gm |> fmap owner

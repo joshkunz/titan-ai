@@ -14,7 +14,7 @@ import qualified Graph as Graph
 import Graph (Edge(..), Graph(..)) 
 import Text.Printf (printf)
 
-import AI.Common (onlyJust, enumerate)
+import AI.Common (onlyJust, enumerate, divApprox)
 import qualified AI.Constant as Constant
 import qualified AI.Always as Always
 import qualified AI.Attack as Attack
@@ -28,20 +28,33 @@ maxSRBounty rs g =
     let next_max v (Region _ (SuperRegion _ b)) = if b > v then b else v
     in Set.foldl next_max 0 rs
 
+
+type StartRanker = Region -> Game -> Double
+
+rankStartingRegions :: StartRanker -> Set Region -> Game -> [Region]
+rankStartingRegions f rs g =
+    Set.elems rs |> map (\r -> (r, f r g))
+                 |> List.sortOn (\(_, rank) -> rank)
+                 |> reverse
+                 |> map (\(r, _) -> r)
+
+bountyPerCapita :: Region -> Game -> Double
+bountyPerCapita r@(Region _ sr) g =
+    let srUnits = case Game.unitsInSuperRegion sr (Game.map g) of
+                        Just x -> x
+                        Nothing -> error "Super region or contained region doesn't have state"
+    -- Rank each region by the bounty-per-capita
+    in (Game.bounty sr) `divApprox` srUnits
+
 highestRegions :: Set Region -> Game -> Set Region
 highestRegions rs g =
     Set.filter (\(Region _ (SuperRegion _ b)) -> b >= maxBounty) rs
     where maxBounty = maxSRBounty rs g
 
--- General strategy: 
---   First, pick starting territories in a high-value super region
---   Second, pick close to other territories we own
---   Second, pick away from wastelands
---   Third, pick close to enemy territory
 startPicker :: Integer -> Set Region -> Game -> Result Region
 startPicker i rs g =
     Result pick (Just (given_log ++ pick_log))
-    where pick = highestRegions rs g |> Set.elems |> head 
+    where pick = rankStartingRegions bountyPerCapita rs g |> head
           pick_log = "[Log/Picker] Picking Region: " ++ (show pick) ++ "\n"
           given_log = ( "[Log/Picker] Given Regions: " 
                      ++ (Sexp.c_namedSet "Regions" rs |> Sexp.render)
@@ -129,8 +142,9 @@ safeMoves g =
     where gm = Game.map g
 
 -- 1. meet cap
--- 2. try to double cap
--- 3. commit any remaining units
+-- 2. try to meet 1.5 cap
+-- 3. try to double cap
+-- 4. try to triple cap
 
 attackMoves :: Game -> [Move]
 attackMoves g = 

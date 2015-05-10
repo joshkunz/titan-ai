@@ -36,9 +36,22 @@ DONE- One territory attacking multiple territories
       the same region, try to spread the attack if possible.
 
 ### Ideas
+
+!!- Make unit allocation take into consideration capturability of a territory,
+    remember to consider all territories neighboring a particular territory.
+
+    May be a good idea to base allocation off of what areas we want to target
+    rather than what areas we want to place. That way we can spread the allocation
+    across the front lines.
+
+!!- We're free to move troops across the frontlines as long as we don't fall
+    below CAP. May be a good idea.
+
 - Try to get super regions that just have a few neutral territories in them.
+  (in the beginning)
 
 - Smart-ish troop movement, trying to meet the minimum cap force
+  - Can also frame this as "balancing"
 
 !!- Try to allocate income to territories where it will equalize the balance of
     the forces with its neighbors, If we easily have double the min CAP, no
@@ -109,6 +122,8 @@ DONE- One territory attacking multiple territories
     - We can use the opponent moves message to see transfers to regions
       we can't actually see, and possible intuit the ownership of the
       region.
+    - average of my income and the max possible income (given what super
+      regions I can see) seems like a good estimate.
 
 - Maybe try to pick a region that close to our other regions as our "starting region"
 

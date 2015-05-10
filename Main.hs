@@ -7,26 +7,6 @@ import System.IO
 import Engine (Engine(..))
 import Common ((|>))
 
-exampleGame = [ "settings timebank 10000"
-              , "settings time_per_move 500"
-              , "settings max_rounds 50"
-              , "settings your_bot player1"
-              , "settings opponent_bot player2"
-              , "setup_map super_regions 1 2 2 5"
-              , "setup_map regions 1 1 2 1 3 2 4 2 5 2"
-              , "setup_map neighbors 1 2,3,4 2 3 4 5"
-              , "setup_map wastelands 3"
-              , "settings starting_regions 2 4"
-              , "settings starting_pick_amount 1"
-              , "pick_starting_region 10000 2 4"
-              , "settings starting_armies 7"
-              , "update_map 1 player1 2 2 player1 4 3 neutral 10 4 player2 5"
-              , "go place_armies 10000"
-              , "go attack/transfer 10000"
-              , "update_map 1 neutral 2 4 player2 5 5 neutral 2"
-              , "opponent_moves player2 place_armies 1 10, player2 attack/transfer 1 2 5"
-              ]
-
 log_output = False
 log_input = False
 
