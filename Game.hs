@@ -181,7 +181,7 @@ setStringSetting s v (Game gs gm) =
         "starting_armies" -> gs { starting_armies = Just (read v :: Integer) }
         "starting_regions" -> 
             words v |> Prelude.map (\x -> (read x :: Integer))
-                    |> Prelude.map ((flip getRegionById) gm)
+                    |> Prelude.map ((flip regionWithId) gm)
                     |> Prelude.map Maybe.fromJust
                     |> Set.fromList 
                     |> \srs -> gs { starting_regions = srs }
@@ -211,56 +211,51 @@ setRegionState r s gm =
     states gm |> Map.insert r s
               |> \s -> gm { states = s }
 
-getRegionState :: Region -> GameMap -> Maybe RegionState
-getRegionState r gm =
-    states gm |> Map.lookup r
-
-getSuperRegionById :: Integer -> GameMap -> Maybe SuperRegion
-getSuperRegionById id gm = 
-    super_regions gm 
-        |> Foldable.find (\(SuperRegion id_ _) -> id_ == id)
-
-regionsInSuperRegion :: SuperRegion -> GameMap -> Set.Set Region 
-regionsInSuperRegion sr gm =
-    Set.filter (regionIn sr) (regions gm)
-    where regionIn sr (Region id su) = sr == su
-
-getRegionById :: Integer -> GameMap -> Maybe Region
-getRegionById id gm =
-    regions gm
-        |> Foldable.find (\(Region id_ _) -> id_ == id)
-
-stateForRegion :: Region -> GameMap -> Maybe RegionState
-stateForRegion r gm = Map.lookup r (states gm) 
-
-unitsInRegion :: Region -> GameMap -> Maybe Integer
-unitsInRegion r gm = stateForRegion r gm |> fmap units 
-
-unitsInSuperRegion :: SuperRegion -> GameMap -> Maybe Integer
-unitsInSuperRegion sr gm =
-    regionsInSuperRegion sr gm |> Set.elems
-                               |> List.map (\r -> unitsInRegion r gm)
-                               |> foldl (liftM2 (+)) (Just 0)
-
-regionOwner :: Region -> GameMap -> Maybe Owner
-regionOwner r gm = stateForRegion r gm |> fmap owner
-
-regionOwnedBy :: Region -> Owner -> GameMap -> Bool
-regionOwnedBy r o gm = 
-    case regionOwner r gm of
-        Just o_ -> o_ == o
-        Nothing -> False 
-
-regionsOwnedBy :: Owner -> GameMap -> Set.Set Region
-regionsOwnedBy o gm  = 
-    Game.regions gm |> Set.filter (\r -> regionOwnedBy r o gm)
-
 applyPlacement :: Placement -> GameMap -> GameMap
 applyPlacement (Placement o region count) gm =
-    let nextState = case stateForRegion region gm of
+    let nextState = case regionState region gm of
                         Just (RegionState _ cCount) ->  RegionState o (count + cCount)
                         Nothing -> RegionState o count
     in setRegionState region nextState gm
 
 applyPlacementGame :: Placement -> Game -> Game
 applyPlacementGame p g = Game.map g |> applyPlacement p |> (flip setMap) g
+
+regionWithId :: Integer -> GameMap -> Maybe Region
+regionWithId id gm =
+    regions gm
+        |> Foldable.find (\(Region id_ _) -> id_ == id)
+
+superRegionWithId :: Integer -> GameMap -> Maybe SuperRegion
+superRegionWithId id gm = 
+    super_regions gm 
+        |> Foldable.find (\(SuperRegion id_ _) -> id_ == id)
+
+regionState :: Region -> GameMap -> Maybe RegionState
+regionState r gm = Map.lookup r (states gm)
+
+regionUnits :: Region -> GameMap -> Maybe Integer
+regionUnits r gm = regionState r gm |> fmap units 
+
+regionOwner :: Region -> GameMap -> Maybe Owner
+regionOwner r gm = regionState r gm |> fmap owner
+
+regionOwnedBy :: Region -> Owner -> GameMap -> Bool
+regionOwnedBy r o gm = case regionOwner r gm of
+                           Just o_ -> o_ == o
+                           Nothing -> False 
+
+regionsWhere :: (Region -> Bool) -> GameMap -> Set.Set Region
+regionsWhere f gm = Game.regions gm |> Set.filter f
+
+regionsOwnedBy :: Owner -> GameMap -> Set.Set Region
+regionsOwnedBy o gm = regionsWhere (\r -> regionOwnedBy r o gm) gm
+
+superRegionRegions :: SuperRegion -> GameMap -> Set.Set Region
+superRegionRegions sr gm = regionsWhere (\(Region id su) -> su == sr) gm
+
+superRegionUnits :: SuperRegion -> GameMap -> Maybe Integer
+superRegionUnits sr gm =
+    superRegionRegions sr gm |> Set.elems
+                             |> List.map (\r -> regionUnits r gm)
+                             |> foldl (liftM2 (+)) (Just 0)

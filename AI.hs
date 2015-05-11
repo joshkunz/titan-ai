@@ -40,7 +40,7 @@ rankStartingRegions f rs g =
 
 bountyPerCapita :: Region -> Game -> Double
 bountyPerCapita r@(Region _ sr) g =
-    let srUnits = case Game.unitsInSuperRegion sr (Game.map g) of
+    let srUnits = case Game.superRegionUnits sr (Game.map g) of
                         Just x -> x
                         Nothing -> error "Super region or contained region doesn't have state"
     -- Rank each region by the bounty-per-capita
@@ -98,6 +98,10 @@ sortCandidatesByHighestRank f rs g =
           extractRank (c, []) = Nothing
           extractRank (c, (_, rank) : _) = Just (c, rank)
 
+-- 1. Try to bring our regions neighboring enemy regions above CAP
+--    - Favour regions where losing the region would jeopardize a bounty
+-- 2. Try to bring our regions neighboring capturable regions above CAP
+-- 3. Distribute amongst territories neighboring hostile (i.e. non-neutral) regions
 armyPlacer :: Integer -> Game -> Result [Placement]
 armyPlacer i g = 
     let placements = 
@@ -122,7 +126,7 @@ armyPlacer i g =
 
 moveForSafeRegion :: Region -> Game -> Maybe Move
 moveForSafeRegion r g =
-    case Game.unitsInRegion r gm of
+    case Game.regionUnits r gm of
         Just u -> if u > Constant.minReserveForce then
                     case Graph.closest r isUnsafe graph of
                         Just (frontline, (Edge _ nr) : _) -> Just (Move Us r nr (u - 1))

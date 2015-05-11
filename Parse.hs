@@ -55,13 +55,13 @@ parseSuperRegion id bounty =
 
 parseRegion :: String -> String -> Game.Game -> Game.Region
 parseRegion id sid g =
-    case Game.getSuperRegionById (read sid :: Integer) (Game.map g) of
+    case Game.superRegionWithId (read sid :: Integer) (Game.map g) of
         Just sr -> Game.Region (read id :: Integer) sr
         Nothing -> error $ "No super region with id \"" ++ sid ++ "\""
 
 parseExistingRegion :: String -> Game.Game -> Game.Region
 parseExistingRegion id (Game.Game _ gm) = 
-    case Game.getRegionById (read id :: Integer) gm of
+    case Game.regionWithId (read id :: Integer) gm of
         Just r -> r
         Nothing -> error $ "Region \"" ++ id ++ "\" not found"
 

@@ -13,6 +13,6 @@ neighbors n g =
 
 units :: Region -> GameMap -> Integer
 units r gm =
-    case Game.unitsInRegion r gm of
+    case Game.regionUnits r gm of
         Just u -> u
         Nothing -> error $ ("No units in region " ++ (show r))

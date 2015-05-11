@@ -9,10 +9,17 @@ import Owned (Owner(..))
 import qualified AI.Always as Always
 import qualified AI.Probability as Prob
 
+
+
 hostileNeighbors :: Region -> GameMap -> Set Region
 hostileNeighbors r gm =
     Game.graph gm |> Always.neighbors r
                   |> Set.filter (\r -> not (Game.regionOwnedBy r Us gm))
+
+opponentNeighbors :: Region -> GameMap -> Set Region
+opponentNeighbors r gm = 
+    Game.graph gm |> Always.neighbors r
+                  |> Set.filter (\r -> Game.regionOwnedBy r Opponent gm)
 
 friendlyNeighbors :: Region -> GameMap -> Set Region
 friendlyNeighbors r gm = 
@@ -45,3 +52,6 @@ regionsWithCapturableNeighbors confidence gm =
                 hostileNeighbors r gm 
                     |> Set.elems
                     |> any (\r -> isCapturable r units confidence gm)
+
+--regionsInDanger :: Double -> GameMap -> Set Region
+--    unsafeRegions gm |> Set.filter capturable

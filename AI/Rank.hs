@@ -27,7 +27,7 @@ possibleArmies gm =
 
 coversSuperRegion :: SuperRegion -> [Region] -> GameMap -> Bool
 coversSuperRegion sr rs gm =
-    Set.difference (Game.regionsInSuperRegion sr gm)
+    Set.difference (Game.superRegionRegions sr gm)
                    (Set.fromList rs) |> (==) Set.empty
 
 groupBySuperRegion :: [Region] -> [[Region]]
@@ -45,7 +45,7 @@ targetCapture _ r@(Region _ sr) g =
           -- How much territory do we have bordering the region?
           friendlyFraction = (Set.size (AI.Game.friendlyNeighbors r gm)) 
                  `divApprox` (Set.size (Always.neighbors r graph))
-          allInSr = Game.regionsInSuperRegion sr gm
+          allInSr = Game.superRegionRegions sr gm
           oursInSr = Set.filter (\r -> Game.regionOwnedBy r Us gm) allInSr
           -- How much of the target super region do we own?
           superRegionCoverFraction = (Set.size oursInSr)
