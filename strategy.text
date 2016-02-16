@@ -1,0 +1,25 @@
+Joint attack strategy:
+
+Goals: 
+    - Get multiple territories to attack the same territory
+    - Get one territory to attack multiple territories if capable
+    - Attack the maximum number of territories we can take every turn
+
+Idea: Try and "equalize" the attack against neighboring regions. We can
+      discover all hostile territories that border territories we own
+      and have them p
+
+T1 A B C
+T2 B C
+T3 B
+
+A can only attack one region so it makes sense for them to use as many units
+as possible. B can attack three territories so they should share their units
+across all attacks if possible. 
+
+Method: Figure out which regions can attack which other regions. For each region
+        we want to attack, rank the attacking regions by the number of other
+        attacks that region can participate. Rank the destination regions.
+        Draw units up to the minimum capture force for each territory from
+        the pool. Discard any territories that don't meet the minimum capture
+        force.

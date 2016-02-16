@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+grep -v "Round " | grep -v "Response timed out" | grep -v "Output from your bot" | grep -v "Parse"

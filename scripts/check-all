@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+
+MAPS=$DIR/../maps
+VERS=$DIR/../vers
+PLAY=$DIR/../../warlight2-engine/play
+
+TEST_VER=$1
+
+for ver in `find $VERS -type f | sort`; do
+    name=`echo $ver | rev | cut -d '/' -f1 | rev`
+    echo ver: $name
+    for map in `find $MAPS -name "*.json" -type f | sort`; do
+        mname=`echo $map | rev | cut -d '/' -f1 | rev`
+        winner=`$PLAY $map $TEST_VER $ver | grep winner | awk '{ print $2 }'`
+        if [ $winner = "player1" ]; then
+            printf "\e[32m$mname\e[39;49m\n"
+        elif [ $winner = "draw" ]; then
+            printf "\e[33m$mname\e[39;49m\n"
+        else
+            printf "\e[31m$mname\e[39;49m\n"
+        fi
+    done
+done
